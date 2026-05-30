@@ -1,0 +1,19 @@
+# Flutter
+.dart_tool/
+build/
+.idea/
+
+# Node.js
+node_modules/
+.env
+
+# Python
+__pycache__/
+*.pyc
+.vscode/
+venv/
+.venv/
+env/
+
+# Windows
+Thumbs.db
