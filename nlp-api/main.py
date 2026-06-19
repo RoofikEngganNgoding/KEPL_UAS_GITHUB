@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 MODEL_NAME = os.getenv("CHATBOT_MODEL", "microsoft/DialoGPT-medium")
-MAX_NEW_TOKENS = int(os.getenv("CHATBOT_MAX_NEW_TOKENS", "60"))
+MAX_NEW_TOKENS = int(os.getenv("CHATBOT_MAX_NEW_TOKENS", "100"))
 
 app = FastAPI(title="Bank Sampah NLP Chatbot")
 app.add_middleware(

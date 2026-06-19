@@ -1,178 +1,283 @@
-import os
-from pathlib import Path
-
+import dlib
 import cv2
 import numpy as np
-from flask import Flask, jsonify, request
-from flask_cors import CORS
+import joblib
+import datetime
 
-BASE_DIR = Path(__file__).resolve().parent
-TRAINING_DIR = BASE_DIR / "training_faces"
-app = Flask(__name__)
-CORS(app)
+from flask import Flask, request, jsonify
+from jose import JWTError, jwt
 
-face_detector = cv2.CascadeClassifier(
-    cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+# ====================== KONFIGURASI ======================
+
+SHAPE_PREDICTOR = "shape_predictor_68_face_landmarks.dat"
+FACE_RECOG_MODEL = "dlib_face_recognition_resnet_model_v1.dat"
+
+SECRET_KEY = "your_secret_key"
+
+# ====================== DLIB ======================
+
+detector = dlib.get_frontal_face_detector()
+
+predictor = dlib.shape_predictor(
+    SHAPE_PREDICTOR
 )
-recognizer = cv2.face.LBPHFaceRecognizer_create()
 
-label_to_name = {}
-model_ready = False
-training_summary = {
-    "people": 0,
-    "faces": 0,
+face_rec_model = dlib.face_recognition_model_v1(
+    FACE_RECOG_MODEL
+)
+
+# ====================== LOAD MODEL ======================
+
+knn = joblib.load("knn_model.pkl")
+
+le = joblib.load("label_encoder.pkl")
+
+X_train = np.load("face_encodings.npy")
+
+# ====================== FLASK ======================
+
+app = Flask(__name__)
+
+# ====================== USER DATABASE ======================
+
+user_map = {
+    "daveo": 2,
+    "juliarti": 3,
+    "angga": 4
 }
 
+# ====================== FUNCTIONS ======================
 
-def detect_largest_face(gray_image):
-    faces = face_detector.detectMultiScale(
-        gray_image,
-        scaleFactor=1.1,
-        minNeighbors=5,
-        minSize=(90, 90),
-    )
-    if len(faces) == 0:
-        return None
-    return max(faces, key=lambda rect: rect[2] * rect[3])
+def get_face_encoding(image, face):
 
+    shape = predictor(image, face)
 
-def crop_face(gray_image, rectangle):
-    x, y, width, height = rectangle
-    face = gray_image[y:y + height, x:x + width]
-    return cv2.resize(face, (200, 200))
-
-
-def train_model():
-    global model_ready, label_to_name, training_summary
-
-    face_samples = []
-    labels = []
-    label_to_name = {}
-
-    if not TRAINING_DIR.exists():
-        model_ready = False
-        return
-
-    people = sorted(
-        directory
-        for directory in TRAINING_DIR.iterdir()
-        if directory.is_dir()
+    return np.array(
+        face_rec_model.compute_face_descriptor(
+            image,
+            shape
+        )
     )
 
-    for label, person_directory in enumerate(people):
-        person_name = person_directory.name.lower()
-        label_to_name[label] = person_name
 
-        for image_path in person_directory.iterdir():
-            if image_path.suffix.lower() not in {".jpg", ".jpeg", ".png"}:
-                continue
+def generate_token(user_id):
 
-            image = cv2.imread(str(image_path))
-            if image is None:
-                continue
-
-            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-            rectangle = detect_largest_face(gray)
-            if rectangle is None:
-                continue
-
-            face_samples.append(crop_face(gray, rectangle))
-            labels.append(label)
-
-    if not face_samples:
-        model_ready = False
-        training_summary = {"people": len(people), "faces": 0}
-        return
-
-    recognizer.train(face_samples, np.array(labels))
-    model_ready = True
-    training_summary = {
-        "people": len(label_to_name),
-        "faces": len(face_samples),
+    payload = {
+        "user_id": user_id,
+        "exp": datetime.datetime.utcnow()
+               + datetime.timedelta(hours=1)
     }
 
+    token = jwt.encode(
+        payload,
+        SECRET_KEY,
+        algorithm="HS256"
+    )
 
-@app.get("/")
+    return token
+
+
+def verify_token(token):
+
+    try:
+
+        payload = jwt.decode(
+            token,
+            SECRET_KEY,
+            algorithms=["HS256"]
+        )
+
+        return payload["user_id"]
+
+    except JWTError:
+
+        return None
+
+
+# ====================== HOME ======================
+
+@app.route("/")
 def home():
+
     return "Face Recognition API Running"
 
-
-@app.get("/health")
+@app.route("/health")
 def health():
-    status_code = 200 if model_ready else 503
+
     return jsonify({
-        "status": "ok" if model_ready else "not_ready",
-        "service": "face-recognition-api",
-        "model_loaded": model_ready,
-        "training": training_summary,
-        "registered_faces": list(label_to_name.values()),
-    }), status_code
+        "status": "ready",
+        "service": "face-recognition",
+        "model_loaded": True
+    }), 200
 
 
-@app.post("/recognize-face")
-def recognize_face():
-    if not model_ready:
+# ====================== LOGIN ======================
+
+@app.route("/login", methods=["POST"])
+def login():
+
+    user_id = "123"
+
+    if user_id:
+
+        token = generate_token(user_id)
+
+        return jsonify({
+            "status": "success",
+            "token": token
+        })
+
+    else:
+
         return jsonify({
             "status": "fail",
-            "message": "Model wajah belum siap",
-        }), 503
-
-    if "image" not in request.files:
-        return jsonify({
-            "status": "fail",
-            "message": "File image tidak ditemukan",
-        }), 422
-
-    image_bytes = np.frombuffer(request.files["image"].read(), np.uint8)
-    image = cv2.imdecode(image_bytes, cv2.IMREAD_COLOR)
-    if image is None:
-        return jsonify({
-            "status": "fail",
-            "message": "Format gambar tidak dapat dibaca",
-        }), 422
-
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    rectangle = detect_largest_face(gray)
-    if rectangle is None:
-        return jsonify({
-            "status": "fail",
-            "message": "Tidak ada wajah terdeteksi",
-            "faces": [],
-        }), 400
-
-    face = crop_face(gray, rectangle)
-    predicted_label, distance = recognizer.predict(face)
-    recognized_name = label_to_name.get(predicted_label, "unknown")
-
-    # LBPH menghasilkan jarak: semakin kecil berarti semakin mirip.
-    confidence = max(0.0, min(1.0, 1.0 - (float(distance) / 100.0)))
-    if distance > 75:
-        return jsonify({
-            "status": "fail",
-            "message": "Wajah tidak dikenali",
-            "faces": [{
-                "label": "Unknown",
-                "confidence": confidence,
-                "distance": float(distance),
-            }],
+            "message": "Invalid credentials"
         }), 401
 
-    return jsonify({
-        "status": "success",
-        "face_label": recognized_name,
-        "faces": [{
-            "label": recognized_name,
-            "confidence": confidence,
-            "distance": float(distance),
-        }],
-    })
+
+# ================= FACE RECOGNITION =================
+
+@app.route("/recognize-face", methods=["POST"])
+def recognize_face():
+
+    try:
+
+        # ================= AMBIL GAMBAR =================
+
+        file = request.files["image"]
+
+        img_array = np.asarray(
+            bytearray(file.read()),
+            dtype=np.uint8
+        )
+
+        image = cv2.imdecode(
+            img_array,
+            cv2.IMREAD_COLOR
+        )
+
+        rgb = cv2.cvtColor(
+            image,
+            cv2.COLOR_BGR2RGB
+        )
+
+        faces = detector(rgb)
+
+        # ================= TIDAK ADA WAJAH =================
+
+        if len(faces) == 0:
+
+            return jsonify({
+                "status": "fail",
+                "message": "Tidak ada wajah terdeteksi",
+                "faces": []
+            }), 400
+
+        results = []
+
+        # ================= LOOP WAJAH =================
+
+        for face in faces:
+
+            encoding = get_face_encoding(
+                rgb,
+                face
+            )
+
+            encoding_2d = encoding.reshape(1, -1)
+
+            # prediksi KNN
+
+            pred_encoded = knn.predict(
+                encoding_2d
+            )[0]
+
+            pred_name = le.inverse_transform(
+                [pred_encoded]
+            )[0]
+
+            # confidence
+
+            distances, _ = knn.kneighbors(
+                encoding_2d,
+                n_neighbors=3
+            )
+
+            confidence = 1 / (1 + distances[0][0])
+
+            print("Prediksi :", pred_name)
+            print("Distance :", distances[0][0])
+            print("Confidence :", confidence)
+
+            # threshold
+
+            label = (
+                pred_name
+                if confidence > 0.6
+                else "Unknown"
+            )
+
+            results.append({
+                "label": label,
+                "confidence": float(confidence)
+            })
+
+        # ================= HASIL TERBAIK =================
+
+        best_result = results[0]
+
+        # ================= UNKNOWN FACE =================
+
+        if best_result["label"] == "Unknown":
+
+            print("Wajah tidak dikenali")
+
+            return jsonify({
+                "status": "fail",
+                "message": "Wajah tidak dikenali",
+                "faces": results
+            }), 401
+
+        # ================= USER LOGIN =================
+
+        recognized_name = best_result["label"].strip()
+
+        print("Asli :", repr(recognized_name))
+        print("Lower :", repr(recognized_name.lower()))
+
+        user_id = user_map.get(
+            recognized_name.lower(),
+            0
+        )
+
+        print("Wajah dikenali :", recognized_name)
+        print("User ID :", user_id)
+
+        # ================= RETURN SUCCESS =================
+
+        return jsonify({
+            "status": "success",
+            "face_label": recognized_name,
+            "user_id": user_id,
+            "faces": results
+        })
+
+    except Exception as e:
+
+        print(e)
+
+        return jsonify({
+            "status": "fail",
+            "message": str(e)
+        }), 500
 
 
-train_model()
+# ====================== RUN ======================
 
 if __name__ == "__main__":
+
     app.run(
-        debug=False,
+        debug=True,
         host="0.0.0.0",
-        port=int(os.getenv("FACE_PORT", "5000")),
+        port=5000
     )
