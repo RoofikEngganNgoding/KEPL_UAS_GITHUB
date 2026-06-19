@@ -21,7 +21,10 @@ chatbot_pipeline = pipeline("text-generation", model="microsoft/DialoGPT-medium"
 FAQ_DATA = { 
     "Apa itu Bank Sampah Sungailiat?": "Bank Sampah Sungailiat adalah program pengelolaan sampah berbasis masyarakat di Sungailiat, Bangka Belitung, yang bertujuan mengurangi sampah melalui daur ulang dan memberikan nilai ekonomis bagi nasabah.", 
     "Bagaimana cara menjadi nasabah Bank Sampah Sungailiat?": "Anda dapat mendaftar sebagai nasabah dengan mengunjungi kantor Bank Sampah Sungailiat di Sungailiat, membawa KTP, dan mengisi formulir pendaftaran. Setelah itu, Anda bisa menyetor sampah yang sudah dipilah.", 
-    "Apa saja layanan Bank Sampah Sungailiat?": "Layanan Bank Sampah Sungailiat meliputi pengumpulan sampah terpilah (plastik, kertas, logam), penimbangan sampah, pencatatan tabungan sampah, serta edukasi tentang pengelolaan sampah dan daur ulang." 
+    "Apa saja layanan Bank Sampah Sungailiat?": "Layanan Bank Sampah Sungailiat meliputi pengumpulan sampah terpilah (plastik, kertas, logam), penimbangan sampah, pencatatan tabungan sampah, serta edukasi tentang pengelolaan sampah dan daur ulang." ,
+    "Siapa yang membuat sistem Bank Sampah Sungailiat ini?" : "Sistem Bank Sampah Sungailiat ini dikembangkan oleh tim yang terdiri dari Roofik Aditya, Daveo Dava, dan Juliarti Safitri.",
+    "Siapa pengembang sistem ini?": "Sistem ini dikembangkan oleh Roofik Aditya, Daveo Dava, dan Juliarti Safitri.",
+    "Siapa saja tim pembuat sistem?": "Tim pembuat sistem ini adalah Roofik Aditya, Daveo Dava, dan Juliarti Safitri.",
 } 
  
 # Keyword mappings for common terms 
@@ -112,3 +115,10 @@ async def chat(user_input: UserInput):
 @app.get("/faq") 
 async def faq(): 
     return FAQ_DATA
+
+@app.get("/")
+async def root():
+    return {
+        "message": "API Chatbot Bank Sampah Sungailiat aktif",
+        "docs": "http://127.0.0.1:8000/docs"
+    }

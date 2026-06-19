@@ -28,11 +28,11 @@ face_rec_model = dlib.face_recognition_model_v1(
 
 # ====================== LOAD MODEL ======================
 
-knn = joblib.load('knn_model.pkl')
+knn = joblib.load("knn_model.pkl")
 
-le = joblib.load('label_encoder.pkl')
+le = joblib.load("label_encoder.pkl")
 
-X_train = np.load('face_encodings.npy')
+X_train = np.load("face_encodings.npy")
 
 # ====================== FLASK ======================
 
@@ -43,7 +43,7 @@ app = Flask(__name__)
 user_map = {
     "daveo": 2,
     "juliarti": 3,
-    "angga": 4,
+    "angga": 4
 }
 
 # ====================== FUNCTIONS ======================
@@ -63,70 +63,79 @@ def get_face_encoding(image, face):
 def generate_token(user_id):
 
     payload = {
-        'user_id': user_id,
-        'exp': datetime.datetime.utcnow()
+        "user_id": user_id,
+        "exp": datetime.datetime.utcnow()
                + datetime.timedelta(hours=1)
     }
+
     token = jwt.encode(
         payload,
         SECRET_KEY,
-        algorithm='HS256'
+        algorithm="HS256"
     )
+
     return token
 
 
 def verify_token(token):
+
     try:
+
         payload = jwt.decode(
             token,
             SECRET_KEY,
-            algorithms=['HS256']
+            algorithms=["HS256"]
         )
-        return payload['user_id']
+
+        return payload["user_id"]
+
     except JWTError:
 
         return None
 
+
 # ====================== HOME ======================
 
-@app.route('/')
+@app.route("/")
 def home():
 
     return "Face Recognition API Running"
 
+
 # ====================== LOGIN ======================
 
-@app.route('/login', methods=['POST'])
+@app.route("/login", methods=["POST"])
 def login():
 
-    user_id = '123'
+    user_id = "123"
 
     if user_id:
 
         token = generate_token(user_id)
 
         return jsonify({
-            'status': 'success',
-            'token': token
+            "status": "success",
+            "token": token
         })
 
     else:
 
         return jsonify({
-            'status': 'fail',
-            'message': 'Invalid credentials'
+            "status": "fail",
+            "message": "Invalid credentials"
         }), 401
+
 
 # ================= FACE RECOGNITION =================
 
-@app.route('/recognize-face', methods=['POST'])
+@app.route("/recognize-face", methods=["POST"])
 def recognize_face():
 
     try:
 
-        # ================= AMBIL IMAGE =================
+        # ================= AMBIL GAMBAR =================
 
-        file = request.files['image']
+        file = request.files["image"]
 
         img_array = np.asarray(
             bytearray(file.read()),
@@ -137,8 +146,6 @@ def recognize_face():
             img_array,
             cv2.IMREAD_COLOR
         )
-
-        # ================= DETEKSI WAJAH =================
 
         rgb = cv2.cvtColor(
             image,
@@ -152,9 +159,9 @@ def recognize_face():
         if len(faces) == 0:
 
             return jsonify({
-                'status': 'fail',
-                'message': 'Tidak ada wajah terdeteksi',
-                'faces': []
+                "status": "fail",
+                "message": "Tidak ada wajah terdeteksi",
+                "faces": []
             }), 400
 
         results = []
@@ -162,8 +169,6 @@ def recognize_face():
         # ================= LOOP WAJAH =================
 
         for face in faces:
-
-            # encoding wajah
 
             encoding = get_face_encoding(
                 rgb,
@@ -191,15 +196,21 @@ def recognize_face():
 
             confidence = 1 / (1 + distances[0][0])
 
+            print("Prediksi :", pred_name)
+            print("Distance :", distances[0][0])
+            print("Confidence :", confidence)
+
             # threshold
 
-            label = pred_name \
-                if confidence > 0.4 \
+            label = (
+                pred_name
+                if confidence > 0.6
                 else "Unknown"
+            )
 
             results.append({
-                'label': label,
-                'confidence': float(confidence)
+                "label": label,
+                "confidence": float(confidence)
             })
 
         # ================= HASIL TERBAIK =================
@@ -208,36 +219,38 @@ def recognize_face():
 
         # ================= UNKNOWN FACE =================
 
-        if best_result['label'] == "Unknown":
+        if best_result["label"] == "Unknown":
 
             print("Wajah tidak dikenali")
 
             return jsonify({
-                'status': 'fail',
-                'message': 'Wajah tidak dikenali',
-                'faces': results
+                "status": "fail",
+                "message": "Wajah tidak dikenali",
+                "faces": results
             }), 401
 
         # ================= USER LOGIN =================
 
-        recognized_name = best_result['label']
+        recognized_name = best_result["label"].strip()
+
+        print("Asli :", repr(recognized_name))
+        print("Lower :", repr(recognized_name.lower()))
 
         user_id = user_map.get(
-            recognized_name,
+            recognized_name.lower(),
             0
         )
 
-        print("Wajah dikenali:", recognized_name)
-
-        print("User ID:", user_id)
+        print("Wajah dikenali :", recognized_name)
+        print("User ID :", user_id)
 
         # ================= RETURN SUCCESS =================
 
         return jsonify({
-            'status': 'success',
-            'face_label': recognized_name,
-            'user_id': user_id,
-            'faces': results
+            "status": "success",
+            "face_label": recognized_name,
+            "user_id": user_id,
+            "faces": results
         })
 
     except Exception as e:
@@ -245,16 +258,17 @@ def recognize_face():
         print(e)
 
         return jsonify({
-            'status': 'fail',
-            'message': str(e)
+            "status": "fail",
+            "message": str(e)
         }), 500
+
 
 # ====================== RUN ======================
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
     app.run(
         debug=True,
-        host='0.0.0.0',
+        host="0.0.0.0",
         port=5000
     )
