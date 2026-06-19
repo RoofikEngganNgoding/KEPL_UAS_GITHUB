@@ -101,6 +101,15 @@ def home():
 
     return "Face Recognition API Running"
 
+@app.route("/health")
+def health():
+
+    return jsonify({
+        "status": "ready",
+        "service": "face-recognition",
+        "model_loaded": True
+    }), 200
+
 
 # ====================== LOGIN ======================
 

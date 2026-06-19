@@ -46,7 +46,7 @@ class FaceRecognitionResult {
 class ApiService {
   static const String _host = String.fromEnvironment(
     'API_HOST',
-    defaultValue: '192.168.1.15',
+    defaultValue: '10.54.13.99',
   );
   static const String _nlpPort = String.fromEnvironment(
     'NLP_PORT',
