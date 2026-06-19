@@ -1,14 +1,8 @@
 import 'package:flutter/material.dart';
+
 import 'api_service.dart';
-
-// ================= FACE RECOGNITION =================
-import 'dart:convert';
-import 'dart:io';
-
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:http/http.dart' as http;
-// ====================================================
+import 'app_theme.dart';
+import 'face_login_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -18,294 +12,310 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final TextEditingController emailController = TextEditingController();
-  final TextEditingController passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
   bool _isPasswordVisible = false;
   bool _isLoading = false;
-  // ================= FACE RECOGNITION =================
-  File? imageFile;
-  final picker = ImagePicker();
-  bool loadingFace = false;
-  // ====================================================
-  // ================= LOGIN EMAIL =================
-  void _handleLogin() async {
-    if (_formKey.currentState!.validate()) {
-      setState(() => _isLoading = true);
 
-      final token = await ApiService().login(
-        emailController.text.trim(),
-        passwordController.text,
-      );
+  bool get _busy => _isLoading;
 
-      setState(() => _isLoading = false);
-
-      if (token != null) {
-        if (mounted) {
-          Navigator.pushReplacementNamed(context, '/dashboard');
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("Email atau Password salah!"),
-
-              backgroundColor: Colors.redAccent,
-
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
-      }
-    }
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 
-  // ====================================================
+  Future<void> _handleLogin() async {
+    if (!_formKey.currentState!.validate() || _busy) return;
 
-  // ================= FACE RECOGNITION =================
+    setState(() => _isLoading = true);
+    final result = await ApiService().loginResult(
+      _emailController.text.trim(),
+      _passwordController.text,
+    );
 
-  Future loginWithFace() async {
-    final picked = await picker.pickImage(source: ImageSource.camera);
-    if (picked == null) return;
-    setState(() {
-      imageFile = File(picked.path);
-      loadingFace = true;
-    });
+    if (!mounted) return;
+    setState(() => _isLoading = false);
 
-    try {
-      var request = http.MultipartRequest(
-        'POST',
-        Uri.parse("${ApiService().baseUrlFace}/recognize-face"), // api
-      );
-      request.files.add(
-        await http.MultipartFile.fromPath('image', imageFile!.path),
-      );
-      var response = await request.send();
-
-      var responseData = await response.stream.bytesToString();
-
-      var data = jsonDecode(responseData);
-
-      print(data);
-
-      if (data["status"] == "success") {
-        final faceLoginResponse = await http.post(
-          Uri.parse('${ApiService().baseUrl}/face-login'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'user_id': data['user_id']}),
-        );
-
-        final loginData = jsonDecode(faceLoginResponse.body);
-
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('token', loginData['token']);
-        await prefs.setInt('user_id', loginData['user_id']);
-
-        if (mounted) {
-          Navigator.pushReplacementNamed(context, '/dashboard');
-        }
-      }
-    } catch (e) {
-      print(e);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Gagal connect Face API")));
+    if (result.success) {
+      _openDashboard();
+      return;
     }
-    setState(() {
-      loadingFace = false;
-    });
+
+    _showMessage(result.message, isError: true);
   }
 
-  // ====================================================
+  Future<void> _loginWithFace() async {
+    if (_busy) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const FaceLoginPage()),
+    );
+  }
+
+  void _openDashboard() {
+    Navigator.pushNamedAndRemoveUntil(context, '/dashboard', (route) => false);
+  }
+
+  void _showMessage(String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? AppTheme.error : AppTheme.primaryDark,
+      ),
+    );
+  }
+
+  String? _validateEmail(String? value) {
+    final email = value?.trim() ?? '';
+    if (email.isEmpty) return 'Email harus diisi';
+    if (!email.contains('@') || !email.contains('.')) {
+      return 'Format email belum benar';
+    }
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        width: double.infinity,
-
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF2E7D32), Color(0xFF81C784)],
-          ),
-        ),
-        child: Column(
-          children: [
-            const SizedBox(height: 80),
-            // ================= HEADER =================
-            const Icon(Icons.recycling, size: 80, color: Colors.white),
-            const SizedBox(height: 10),
-            const Text(
-              "BANK SAMPAH",
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 2,
-              ),
-            ),
-
-            const Text(
-              "Kelola sampah jadi berkah",
-
-              style: TextStyle(color: Colors.white70, fontSize: 16),
-            ),
-
-            const SizedBox(height: 40),
-
-            // ==========================================
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 30,
-                  vertical: 40,
-                ),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(40),
-                    topRight: Radius.circular(40),
-                  ),
-                ),
-
-                child: SingleChildScrollView(
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          "Selamat Datang",
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const _BrandHeader(),
+                  const SizedBox(height: 28),
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: AppTheme.cardDecoration(),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Selamat datang kembali',
+                            style: Theme.of(context).textTheme.headlineMedium,
                           ),
-                        ),
-
-                        const SizedBox(height: 8),
-                        const Text(
-                          "Silakan login untuk melanjutkan",
-                          style: TextStyle(color: Colors.grey),
-                        ),
-
-                        const SizedBox(height: 30),
-
-                        // ================= EMAIL =================
-                        TextFormField(
-                          controller: emailController,
-                          keyboardType: TextInputType.emailAddress,
-                          decoration: InputDecoration(
-                            labelText: "Email",
-                            prefixIcon: const Icon(Icons.email_outlined),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(15),
+                          const SizedBox(height: 6),
+                          const Text(
+                            'Masuk untuk mengelola data sampah yang tersimpan di akunmu.',
+                            style: TextStyle(
+                              color: AppTheme.greyText,
+                              height: 1.5,
                             ),
                           ),
-                          validator: (value) => value!.isEmpty
-                              ? "Email tidak boleh kosong"
-                              : null,
-                        ),
-
-                        const SizedBox(height: 20),
-
-                        // ================= PASSWORD =================
-                        TextFormField(
-                          controller: passwordController,
-                          obscureText: !_isPasswordVisible,
-                          decoration: InputDecoration(
-                            labelText: "Password",
-                            prefixIcon: const Icon(Icons.lock_outline),
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                _isPasswordVisible
-                                    ? Icons.visibility
-                                    : Icons.visibility_off,
-                              ),
-                              onPressed: () => setState(
-                                () => _isPasswordVisible = !_isPasswordVisible,
-                              ),
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(15),
+                          const SizedBox(height: 24),
+                          const Text(
+                            'Email',
+                            style: TextStyle(
+                              color: AppTheme.darkText,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
-                          validator: (value) => value!.isEmpty
-                              ? "Password tidak boleh kosong"
-                              : null,
-                        ),
-
-                        const SizedBox(height: 40),
-                        // ================= LOGIN BUTTON =================
-                        SizedBox(
-                          width: double.infinity,
-                          height: 55,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF2E7D32),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(15),
-                              ),
-                              elevation: 5,
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: _emailController,
+                            enabled: !_busy,
+                            keyboardType: TextInputType.emailAddress,
+                            textInputAction: TextInputAction.next,
+                            autofillHints: const [AutofillHints.email],
+                            decoration: const InputDecoration(
+                              hintText: 'nama@email.com',
+                              prefixIcon: Icon(Icons.alternate_email_rounded),
+                              floatingLabelBehavior:
+                                  FloatingLabelBehavior.never,
                             ),
-
-                            onPressed: _isLoading ? null : _handleLogin,
-                            child: _isLoading
-                                ? const CircularProgressIndicator(
-                                    color: Colors.white,
-                                  )
-                                : const Text(
-                                    "MASUK",
-
+                            validator: _validateEmail,
+                          ),
+                          const SizedBox(height: 18),
+                          const Text(
+                            'Password',
+                            style: TextStyle(
+                              color: AppTheme.darkText,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: _passwordController,
+                            enabled: !_busy,
+                            obscureText: !_isPasswordVisible,
+                            textInputAction: TextInputAction.done,
+                            autofillHints: const [AutofillHints.password],
+                            onFieldSubmitted: (_) => _handleLogin(),
+                            decoration: InputDecoration(
+                              hintText: 'Masukkan password',
+                              prefixIcon: const Icon(
+                                Icons.lock_outline_rounded,
+                              ),
+                              suffixIcon: IconButton(
+                                tooltip: _isPasswordVisible
+                                    ? 'Sembunyikan password'
+                                    : 'Tampilkan password',
+                                onPressed: _busy
+                                    ? null
+                                    : () => setState(
+                                        () => _isPasswordVisible =
+                                            !_isPasswordVisible,
+                                      ),
+                                icon: Icon(
+                                  _isPasswordVisible
+                                      ? Icons.visibility_outlined
+                                      : Icons.visibility_off_outlined,
+                                ),
+                              ),
+                              floatingLabelBehavior:
+                                  FloatingLabelBehavior.never,
+                            ),
+                            validator: (value) => value == null || value.isEmpty
+                                ? 'Password harus diisi'
+                                : null,
+                          ),
+                          const SizedBox(height: 22),
+                          ElevatedButton(
+                            onPressed: _busy ? null : _handleLogin,
+                            child: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 180),
+                              child: _isLoading
+                                  ? const SizedBox(
+                                      key: ValueKey('login-loading'),
+                                      width: 22,
+                                      height: 22,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2.4,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Text(
+                                      'Masuk ke Akun',
+                                      key: ValueKey('login-text'),
+                                    ),
+                            ),
+                          ),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 18),
+                            child: Row(
+                              children: [
+                                Expanded(child: Divider()),
+                                Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 12),
+                                  child: Text(
+                                    'ATAU MASUK CEPAT',
                                     style: TextStyle(
-                                      color: Colors.white,
-
-                                      fontSize: 18,
-
-                                      fontWeight: FontWeight.bold,
+                                      color: AppTheme.greyText,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: 0.6,
                                     ),
                                   ),
-                          ),
-                        ),
-
-                        const SizedBox(height: 20),
-                        // ================= FACE LOGIN =================
-                        SizedBox(
-                          width: double.infinity,
-                          height: 55,
-                          child: ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.orange,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(15),
-                              ),
+                                ),
+                                Expanded(child: Divider()),
+                              ],
                             ),
-                            onPressed: loadingFace ? null : loginWithFace,
-                            icon: const Icon(Icons.face, color: Colors.white),
-                            label: loadingFace
-                                ? const CircularProgressIndicator(
-                                    color: Colors.white,
-                                  )
-                                : const Text(
-                                    "LOGIN DENGAN WAJAH",
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
                           ),
-                        ),
-                        // ==============================================
-                      ],
+                          OutlinedButton.icon(
+                            onPressed: _busy ? null : _loginWithFace,
+                            icon: const Icon(Icons.face_rounded),
+                            label: const Text('Pindai Wajah Otomatis'),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
+                  const SizedBox(height: 18),
+                  const _SecurityNote(),
+                ],
               ),
             ),
-          ],
+          ),
         ),
+      ),
+    );
+  }
+}
+
+class _BrandHeader extends StatelessWidget {
+  const _BrandHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          width: 76,
+          height: 76,
+          decoration: BoxDecoration(
+            gradient: AppTheme.heroGradient,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: AppTheme.primary.withAlpha(55),
+                blurRadius: 24,
+                offset: const Offset(0, 12),
+              ),
+            ],
+          ),
+          child: const Icon(
+            Icons.recycling_rounded,
+            color: Colors.white,
+            size: 42,
+          ),
+        ),
+        const SizedBox(height: 18),
+        Text(
+          'Bank Sampah Digital',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+            fontSize: 24,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 6),
+        const Text(
+          'Kelola sampah dengan lebih rapi dan transparan',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: AppTheme.greyText, height: 1.45),
+        ),
+      ],
+    );
+  }
+}
+
+class _SecurityNote extends StatelessWidget {
+  const _SecurityNote();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: AppTheme.cardDecoration(
+        color: AppTheme.lightGreen,
+        bordered: true,
+      ),
+      child: const Row(
+        children: [
+          Icon(Icons.verified_user_outlined, color: AppTheme.primary),
+          SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Login wajah menggunakan kamera depan dan hanya dipakai untuk proses verifikasi akun.',
+              style: TextStyle(
+                color: AppTheme.primaryDark,
+                fontSize: 12,
+                height: 1.45,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

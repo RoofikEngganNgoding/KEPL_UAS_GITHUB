@@ -1,16 +1,51 @@
-# flutter_api_node
+# Bank Sampah Digital
 
-A new Flutter project.
+Aplikasi Flutter untuk login akun/login wajah, CRUD data sampah, dan chatbot NLP.
 
-## Getting Started
+## Menjalankan layanan
 
-This project is a starting point for a Flutter application.
+Jalankan dari root repository menggunakan PowerShell:
 
-A few resources to get you started if this is your first Flutter project:
+```powershell
+.\start_services.ps1
+```
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+Layanan yang digunakan:
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+- API dan database: `http://192.168.1.15:3000`
+- Face recognition: `http://192.168.1.15:5000`
+- Chatbot NLP: `http://192.168.1.15:8001`
+
+Chatbot memakai model `microsoft/DialoGPT-medium`. Status di aplikasi berubah
+menjadi **Terhubung** hanya setelah endpoint `/health` memastikan model selesai
+dimuat. Status diperiksa ulang setiap lima detik dan dapat diperbarui langsung
+dengan menarik halaman chatbot ke bawah.
+
+## Menjalankan aplikasi
+
+```powershell
+cd flutter_api_node
+flutter pub get
+flutter run
+```
+
+Jika alamat IP komputer berubah:
+
+```powershell
+flutter run --dart-define=API_HOST=ALAMAT_IP
+```
+
+Port chatbot juga dapat diganti:
+
+```powershell
+flutter run --dart-define=NLP_PORT=8001
+```
+
+## Fitur aktif
+
+- Login email dan password.
+- Login wajah dengan kamera depan dan pengambilan foto otomatis.
+- Tambah, baca, ubah, dan hapus data sampah.
+- Upload foto sampah.
+- Chatbot berbasis model NLP.
+- Health check nyata untuk API/database, face recognition, dan chatbot.
