@@ -1,213 +1,467 @@
-// 1. IMPORT SEMUA LIBRARY YANG DIBUTUHKAN 
-const cors = require('cors');
-const express = require('express'); 
-const jwt = require('jsonwebtoken'); 
-const bcrypt = require('bcryptjs'); 
-const multer = require('multer'); 
-const path = require('path'); 
-const fs = require('fs'); 
-const db = require('./db'); // Pastikan koneksi database sudah benar di db.js 
-require('dotenv').config(); 
- 
-// 2. INISIALISASI APP (INI SANGAT PENTING) 
-const app = express(); 
-const SECRET_KEY = process.env.JWT_SECRET || "kunci_rahasia_bank_sampah"; 
- 
-// 3. MIDDLEWARE 
-app.use(express.json()); 
+const cors = require("cors");
+const express = require("express");
+const jwt = require("jsonwebtoken");
+const bcrypt = require("bcryptjs");
+const multer = require("multer");
+const path = require("path");
+const fs = require("fs");
+const db = require("./db");
+require("dotenv").config();
+
+const app = express();
+const SECRET_KEY = process.env.JWT_SECRET || "kunci_rahasia_bank_sampah";
+const PORT = Number(process.env.PORT || 3000);
+const uploadDirectory = path.join(__dirname, "uploads");
+
+app.use(express.json());
 app.use(cors());
-app.use('/uploads', express.static('uploads')); // Akses gambar via browser 
- 
-// Middleware Otorisasi JWT 
-const authenticateToken = (req, res, next) => { 
-    const authHeader = req.headers['authorization']; 
-    const token = authHeader && authHeader.split(' ')[1]; 
-    if (!token) return res.status(401).json({ message: "Token hilang" }); 
- 
-    jwt.verify(token, SECRET_KEY, (err, user) => { 
-        if (err) return res.status(403).json({ message: "Token tidak valid" }); 
-        req.user = user; 
-        next(); 
-    }); 
-}; 
- 
-// 4. KONFIGURASI MULTER (UPLOAD GAMBAR) 
-const storage = multer.diskStorage({ 
-    destination: (req, file, cb) => { 
-        const dir = './uploads'; 
-        if (!fs.existsSync(dir)) fs.mkdirSync(dir); 
-        cb(null, dir); 
-    }, 
-    filename: (req, file, cb) => { 
-        cb(null, Date.now() + path.extname(file.originalname)); 
-    } 
-}); 
-const upload = multer({ storage: storage }); 
- 
-// 5. ROUTES LOGIN 
-app.post('/login', async (req, res) => { 
-    const { email, password } = req.body; 
-    try { 
-        const [rows] = await db.execute('SELECT * FROM users WHERE email = ?', 
-[email]); 
-        const user = rows[0]; 
-        if (!user || !(await bcrypt.compare(password, user.password))) { 
-            return res.status(400).json({ message: "Kredensial salah" }); 
-        } 
-        const token = jwt.sign({ id: user.id }, SECRET_KEY, { expiresIn: '1h' }); 
-        res.json({ 
-            token, user_id: user.id, email: user.email }); 
+app.use("/uploads", express.static(uploadDirectory));
 
+function sendError(res, status, code, message, detail) {
+  return res.status(status).json({
+    success: false,
+    code,
+    message,
+    ...(detail ? { detail } : {}),
+  });
+}
 
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers.authorization;
+  const token = authHeader && authHeader.split(" ")[1];
+  if (!token) {
+    return sendError(res, 401, "TOKEN_MISSING", "Sesi login tidak ditemukan.");
+  }
 
-    } catch (err) { 
-        res.status(500).json({ error: err.message }); 
-    } 
-}); 
-app.post('/face-login', async (req, res) => {
-    const { user_id } = req.body;
-    try {
-        const [rows] = await db.execute(
-            'SELECT * FROM users WHERE id = ?',
-            [user_id]
-        );
-        if (rows.length === 0) {
-            return res.status(404).json({
-                message: 'User tidak ditemukan'
-            });
-        }
-        const user = rows[0];
-        const token = jwt.sign(
-            { id: user.id },
-            SECRET_KEY,
-            { expiresIn: '1h' }
-        );
-        res.json({
-            token,
-            user_id: user.id,
-            email: user.email
-        });
-    } catch (err) {
-        res.status(500).json({
-            error: err.message
-        });
+  jwt.verify(token, SECRET_KEY, (error, user) => {
+    if (error) {
+      return sendError(
+        res,
+        403,
+        "TOKEN_INVALID",
+        "Sesi login sudah tidak valid. Silakan masuk kembali.",
+      );
     }
-});
- 
-// 6. ROUTES CRUD SAMPAH 
-app.post('/sampah', authenticateToken, upload.single('pic'), async (req, res) => 
-{ 
-    const { nama_sampah } = req.body; 
-    const user_id = req.user.id;
+    req.user = user;
+    next();
+  });
+}
 
-    const pic = req.file ? req.file.filename : null; 
-    try { 
-        const [result] = await db.execute( 
-            'INSERT INTO sampah (nama_sampah, pic,user_id) VALUES (?, ?, ?)',  
-            [nama_sampah, pic, user_id] 
-        ); 
-        res.status(201).json({ message: "Data berhasil ditambah", id: 
-result.insertId }); 
-    } catch (err) { 
-        res.status(500).json({ error: err.message }); 
-    } 
-}); 
- 
-// --- READ ALL: Ambil Semua Data Sampah --- 
-app.get('/sampah', authenticateToken, async (req, res) => { 
-    try { 
-        const user_id = req.user.id;
-        const [rows] = await db.execute('SELECT * FROM sampah WHERE user_id = ?',
-         [user_id] );
-         
-        // Menambahkan URL lengkap untuk gambar agar bisa diakses langsung 
-        const dataDenganUrl = rows.map(item => ({ 
-            ...item, 
-            pic_url: item.pic ? `http://192.168.1.14:3000/uploads/${item.pic}` 
-            : null 
-        })); 
- 
-        res.json(dataDenganUrl); 
-    } catch (err) { 
-        res.status(500).json({ error: err.message }); 
-    } 
-}); 
-// --- READ ONE: Ambil Satu Data Sampah Berdasarkan ID --- 
-app.get('/sampah/:id', authenticateToken, async (req, res) => { 
-    try { 
-        const [rows] = await db.execute('SELECT * FROM sampah WHERE id = ?', 
-[req.params.id]); 
-        if (rows.length === 0) return res.status(404).json({ message: "Data tidak ditemukan" }); 
-         
-        res.json(rows[0]); 
-    } catch (err) { 
-        res.status(500).json({ error: err.message }); 
-    } 
-}); 
- 
-// --- UPDATE: Perbarui Nama Sampah atau Gambar --- 
-app.put('/sampah/:id', authenticateToken, upload.single('pic'), async (req, res) => { 
-    const { id } = req.params; 
-    const { nama_sampah } = req.body; 
-     
-    try { 
-        // Cek apakah data ada 
-        const [existing] = await db.execute('SELECT * FROM sampah WHERE id = ?', 
-[id]); 
-        if (existing.length === 0) return res.status(404).json({ message: "Data tidak ditemukan" }); 
- 
-        let query = 'UPDATE sampah SET nama_sampah = ?'; 
-        let params = [nama_sampah || existing[0].nama_sampah]; 
- 
-        // Jika ada upload gambar baru 
-        if (req.file) { 
-            query += ', pic = ?'; 
-            params.push(req.file.filename); 
- 
-            // Opsional: Hapus file gambar lama dari folder /uploads 
-            if (existing[0].pic) { 
-                const oldPath = path.join(__dirname, 'uploads', existing[0].pic); 
-                if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath); 
-            } 
-        } 
- 
-        query += ' WHERE id = ?'; 
-        params.push(id); 
- 
-        await db.execute(query, params); 
-        res.json({ message: "Data sampah berhasil diperbarui" }); 
-    } catch (err) { 
-        res.status(500).json({ error: err.message }); 
-    } 
-}); 
- 
-// --- DELETE: Hapus Data dan File Gambarnya --- 
-app.delete('/sampah/:id', authenticateToken, async (req, res) => { 
-    const { id } = req.params; 
-    try { 
-        // Ambil info gambar sebelum data dihapus dari DB 
-        const [rows] = await db.execute('SELECT pic FROM sampah WHERE id = ?', 
-[id]); 
-        if (rows.length === 0) return res.status(404).json({ message: "Data tidak ditemukan" }); 
- 
-        // Hapus file fisik jika ada 
-        if (rows[0].pic) { 
-            const filePath = path.join(__dirname, 'uploads', rows[0].pic); 
-            if (fs.existsSync(filePath)) fs.unlinkSync(filePath); 
-        } 
- 
-        // Hapus baris di database 
-        await db.execute('DELETE FROM sampah WHERE id = ?', [id]); 
-        res.json({ message: "Data sampah dan file gambar berhasil dihapus" }); 
-    } catch (err) { 
-        res.status(500).json({ error: err.message }); 
-    } 
-}); 
-app.get('/', (req, res) => {
-    res.send('API Bank Sampah Aktif');
+const storage = multer.diskStorage({
+  destination: (_req, _file, callback) => {
+    fs.mkdirSync(uploadDirectory, { recursive: true });
+    callback(null, uploadDirectory);
+  },
+  filename: (_req, file, callback) => {
+    const extension = path.extname(file.originalname).toLowerCase() || ".jpg";
+    callback(null, `${Date.now()}-${Math.round(Math.random() * 1e9)}${extension}`);
+  },
 });
-// 7. JALANKAN SERVER 
-const PORT = 3000; 
-app.listen(PORT, () => { 
-    console.log(`Server aktif di http://localhost:${PORT}`); 
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, callback) => {
+    if (!file.mimetype.startsWith("image/")) {
+      callback(new Error("File harus berupa gambar."));
+      return;
+    }
+    callback(null, true);
+  },
 });
+
+function removeUpload(fileName) {
+  if (!fileName) return;
+  const filePath = path.join(uploadDirectory, path.basename(fileName));
+  if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+}
+
+async function ensureDatabaseSchema() {
+  const [faceLabelColumn] = await db.execute(
+    "SHOW COLUMNS FROM users LIKE 'face_label'",
+  );
+  if (faceLabelColumn.length === 0) {
+    await db.execute(
+      "ALTER TABLE users ADD COLUMN face_label VARCHAR(100) NULL AFTER nama",
+    );
+  }
+
+  const [faceLabelIndex] = await db.execute(
+    "SHOW INDEX FROM users WHERE Key_name = 'users_face_label_unique'",
+  );
+  if (faceLabelIndex.length === 0) {
+    await db.execute(
+      "ALTER TABLE users ADD UNIQUE INDEX users_face_label_unique (face_label)",
+    );
+  }
+
+  const [userIdColumn] = await db.execute(
+    "SHOW COLUMNS FROM sampah LIKE 'user_id'",
+  );
+
+  if (userIdColumn.length === 0) {
+    await db.execute("ALTER TABLE sampah ADD COLUMN user_id INT NULL AFTER id");
+  }
+
+  const [firstUserRows] = await db.execute(
+    "SELECT id FROM users ORDER BY id ASC LIMIT 1",
+  );
+  if (firstUserRows.length === 0) {
+    throw new Error("Tabel users belum memiliki akun untuk pemilik data sampah.");
+  }
+
+  const defaultFaceLabel = process.env.DEFAULT_FACE_LABEL || "daveo";
+  await db.execute(
+    `UPDATE users
+     SET face_label = ?
+     WHERE id = ?
+       AND face_label IS NULL`,
+    [defaultFaceLabel, firstUserRows[0].id],
+  );
+
+  await db.execute("UPDATE sampah SET user_id = ? WHERE user_id IS NULL", [
+    firstUserRows[0].id,
+  ]);
+  await db.execute("ALTER TABLE sampah MODIFY COLUMN user_id INT NOT NULL");
+
+  const [indexRows] = await db.execute(
+    "SHOW INDEX FROM sampah WHERE Key_name = 'idx_sampah_user_id'",
+  );
+  if (indexRows.length === 0) {
+    await db.execute(
+      "ALTER TABLE sampah ADD INDEX idx_sampah_user_id (user_id)",
+    );
+  }
+
+  const [foreignKeyRows] = await db.execute(
+    `SELECT CONSTRAINT_NAME
+     FROM information_schema.KEY_COLUMN_USAGE
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'sampah'
+       AND COLUMN_NAME = 'user_id'
+       AND REFERENCED_TABLE_NAME = 'users'`,
+  );
+  if (foreignKeyRows.length === 0) {
+    await db.execute(
+      `ALTER TABLE sampah
+       ADD CONSTRAINT fk_sampah_user
+       FOREIGN KEY (user_id) REFERENCES users(id)
+       ON UPDATE CASCADE
+       ON DELETE CASCADE`,
+    );
+  }
+}
+
+app.get("/health", async (_req, res) => {
+  try {
+    await db.execute("SELECT 1");
+    res.json({
+      success: true,
+      service: "bank-sampah-api",
+      database: "connected",
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    sendError(
+      res,
+      503,
+      "DATABASE_UNAVAILABLE",
+      "API aktif, tetapi database tidak dapat dihubungi.",
+      error.message,
+    );
+  }
+});
+
+app.post("/login", async (req, res) => {
+  const email = req.body.email?.trim();
+  const password = req.body.password;
+  if (!email || !password) {
+    return sendError(
+      res,
+      422,
+      "VALIDATION_ERROR",
+      "Email dan password harus diisi.",
+    );
+  }
+
+  try {
+    const [rows] = await db.execute("SELECT * FROM users WHERE email = ?", [
+      email,
+    ]);
+    const user = rows[0];
+    if (!user || !(await bcrypt.compare(password, user.password))) {
+      return sendError(
+        res,
+        400,
+        "INVALID_CREDENTIALS",
+        "Email atau password belum sesuai.",
+      );
+    }
+
+    const token = jwt.sign({ id: user.id }, SECRET_KEY, { expiresIn: "1h" });
+    res.json({
+      success: true,
+      token,
+      user_id: user.id,
+      email: user.email,
+      nama: user.nama,
+    });
+  } catch (error) {
+    sendError(res, 500, "LOGIN_FAILED", "Login belum berhasil.", error.message);
+  }
+});
+
+app.post("/face-login", async (req, res) => {
+  const userId = Number(req.body.user_id);
+  const faceLabel = req.body.face_label?.toString().trim().toLowerCase();
+  if ((!Number.isInteger(userId) || userId <= 0) && !faceLabel) {
+    return sendError(
+      res,
+      422,
+      "INVALID_FACE_IDENTITY",
+      "Identitas hasil pengenalan wajah tidak valid.",
+    );
+  }
+
+  try {
+    const [rows] = faceLabel
+      ? await db.execute(
+          "SELECT * FROM users WHERE LOWER(face_label) = ? LIMIT 1",
+          [faceLabel],
+        )
+      : await db.execute("SELECT * FROM users WHERE id = ?", [userId]);
+    if (rows.length === 0) {
+      return sendError(
+        res,
+        404,
+        "FACE_USER_NOT_FOUND",
+        "Wajah dikenali, tetapi belum terhubung ke akun pengguna.",
+      );
+    }
+
+    const user = rows[0];
+    const token = jwt.sign({ id: user.id }, SECRET_KEY, { expiresIn: "1h" });
+    res.json({
+      success: true,
+      token,
+      user_id: user.id,
+      email: user.email,
+      nama: user.nama,
+    });
+  } catch (error) {
+    sendError(
+      res,
+      500,
+      "FACE_LOGIN_FAILED",
+      "Login wajah belum berhasil.",
+      error.message,
+    );
+  }
+});
+
+app.post(
+  "/sampah",
+  authenticateToken,
+  upload.single("pic"),
+  async (req, res) => {
+    const namaSampah = req.body.nama_sampah?.trim();
+    if (!namaSampah) {
+      removeUpload(req.file?.filename);
+      return sendError(
+        res,
+        422,
+        "VALIDATION_ERROR",
+        "Nama sampah harus diisi.",
+      );
+    }
+
+    try {
+      const [result] = await db.execute(
+        "INSERT INTO sampah (user_id, nama_sampah, pic) VALUES (?, ?, ?)",
+        [req.user.id, namaSampah, req.file?.filename ?? null],
+      );
+      res.status(201).json({
+        success: true,
+        message: "Data sampah berhasil ditambahkan.",
+        id: result.insertId,
+      });
+    } catch (error) {
+      removeUpload(req.file?.filename);
+      sendError(
+        res,
+        500,
+        "CREATE_WASTE_FAILED",
+        "Data sampah belum berhasil ditambahkan.",
+        error.message,
+      );
+    }
+  },
+);
+
+app.get("/sampah", authenticateToken, async (req, res) => {
+  try {
+    const [rows] = await db.execute(
+      `SELECT id, user_id, nama_sampah, pic, created_at
+       FROM sampah
+       WHERE user_id = ?
+       ORDER BY created_at DESC, id DESC`,
+      [req.user.id],
+    );
+
+    const baseUrl = process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get("host")}`;
+    const data = rows.map((item) => ({
+      ...item,
+      pic_url: item.pic ? `${baseUrl}/uploads/${item.pic}` : null,
+    }));
+    res.json({ success: true, data });
+  } catch (error) {
+    sendError(
+      res,
+      500,
+      "FETCH_WASTE_FAILED",
+      "Data sampah belum dapat dimuat.",
+      error.message,
+    );
+  }
+});
+
+app.get("/sampah/:id", authenticateToken, async (req, res) => {
+  try {
+    const [rows] = await db.execute(
+      "SELECT * FROM sampah WHERE id = ? AND user_id = ?",
+      [req.params.id, req.user.id],
+    );
+    if (rows.length === 0) {
+      return sendError(
+        res,
+        404,
+        "WASTE_NOT_FOUND",
+        "Data sampah tidak ditemukan.",
+      );
+    }
+    res.json({ success: true, data: rows[0] });
+  } catch (error) {
+    sendError(
+      res,
+      500,
+      "FETCH_WASTE_FAILED",
+      "Data sampah belum dapat dimuat.",
+      error.message,
+    );
+  }
+});
+
+app.put(
+  "/sampah/:id",
+  authenticateToken,
+  upload.single("pic"),
+  async (req, res) => {
+    const namaSampah = req.body.nama_sampah?.trim();
+
+    try {
+      const [existingRows] = await db.execute(
+        "SELECT * FROM sampah WHERE id = ? AND user_id = ?",
+        [req.params.id, req.user.id],
+      );
+      if (existingRows.length === 0) {
+        removeUpload(req.file?.filename);
+        return sendError(
+          res,
+          404,
+          "WASTE_NOT_FOUND",
+          "Data sampah tidak ditemukan.",
+        );
+      }
+
+      const existing = existingRows[0];
+      const nextName = namaSampah || existing.nama_sampah;
+      const nextPic = req.file?.filename || existing.pic;
+
+      await db.execute(
+        "UPDATE sampah SET nama_sampah = ?, pic = ? WHERE id = ? AND user_id = ?",
+        [nextName, nextPic, req.params.id, req.user.id],
+      );
+
+      if (req.file && existing.pic) removeUpload(existing.pic);
+      res.json({ success: true, message: "Data sampah berhasil diperbarui." });
+    } catch (error) {
+      removeUpload(req.file?.filename);
+      sendError(
+        res,
+        500,
+        "UPDATE_WASTE_FAILED",
+        "Data sampah belum berhasil diperbarui.",
+        error.message,
+      );
+    }
+  },
+);
+
+app.delete("/sampah/:id", authenticateToken, async (req, res) => {
+  try {
+    const [rows] = await db.execute(
+      "SELECT pic FROM sampah WHERE id = ? AND user_id = ?",
+      [req.params.id, req.user.id],
+    );
+    if (rows.length === 0) {
+      return sendError(
+        res,
+        404,
+        "WASTE_NOT_FOUND",
+        "Data sampah tidak ditemukan.",
+      );
+    }
+
+    await db.execute("DELETE FROM sampah WHERE id = ? AND user_id = ?", [
+      req.params.id,
+      req.user.id,
+    ]);
+    removeUpload(rows[0].pic);
+    res.json({ success: true, message: "Data sampah berhasil dihapus." });
+  } catch (error) {
+    sendError(
+      res,
+      500,
+      "DELETE_WASTE_FAILED",
+      "Data sampah belum berhasil dihapus.",
+      error.message,
+    );
+  }
+});
+
+app.get("/", (_req, res) => {
+  res.send("API Bank Sampah Aktif");
+});
+
+app.use((error, _req, res, _next) => {
+  if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") {
+    return sendError(
+      res,
+      413,
+      "IMAGE_TOO_LARGE",
+      "Ukuran foto maksimal 5 MB.",
+    );
+  }
+  return sendError(
+    res,
+    400,
+    "REQUEST_FAILED",
+    error.message || "Permintaan belum dapat diproses.",
+  );
+});
+
+async function startServer() {
+  await ensureDatabaseSchema();
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server aktif di http://0.0.0.0:${PORT}`);
+  });
+}
+
+if (require.main === module) {
+  startServer().catch((error) => {
+    console.error("Gagal menjalankan API:", error);
+    process.exit(1);
+  });
+}
+
+module.exports = { app, ensureDatabaseSchema, startServer };
