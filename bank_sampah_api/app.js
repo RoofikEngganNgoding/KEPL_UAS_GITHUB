@@ -12,6 +12,14 @@ const app = express();
 const SECRET_KEY = process.env.JWT_SECRET || "kunci_rahasia_bank_sampah";
 const PORT = Number(process.env.PORT || 3000);
 const uploadDirectory = path.join(__dirname, "uploads");
+const nlpCandidates = (
+  process.env.NLP_INTERNAL_URLS ||
+  process.env.NLP_INTERNAL_URL ||
+  "http://127.0.0.1:8001,http://127.0.0.1:8000"
+)
+  .split(",")
+  .map((value) => value.trim().replace(/\/+$/, ""))
+  .filter(Boolean);
 
 app.use(express.json());
 app.use(cors());
@@ -74,6 +82,56 @@ function removeUpload(fileName) {
   if (!fileName) return;
   const filePath = path.join(uploadDirectory, path.basename(fileName));
   if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = 3000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        Pragma: "no-cache",
+        ...(options.headers || {}),
+      },
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function isReadyNlpHealth(data) {
+  return (
+    data &&
+    data.service === "bank-sampah-chatbot" &&
+    data.status === "ready" &&
+    data.model_loaded === true
+  );
+}
+
+async function probeNlpCandidate(baseUrl) {
+  try {
+    const response = await fetchWithTimeout(
+      `${baseUrl}/health?_proxy_check=${Date.now()}`,
+      {},
+      2500,
+    );
+    const data = await response.json();
+    if (!response.ok || !isReadyNlpHealth(data)) return null;
+    return { baseUrl, data };
+  } catch (_error) {
+    return null;
+  }
+}
+
+async function resolveNlpService() {
+  for (const candidate of nlpCandidates) {
+    const service = await probeNlpCandidate(candidate);
+    if (service) return service;
+  }
+  return null;
 }
 
 async function ensureDatabaseSchema() {
@@ -168,6 +226,83 @@ app.get("/health", async (_req, res) => {
       "DATABASE_UNAVAILABLE",
       "API aktif, tetapi database tidak dapat dihubungi.",
       error.message,
+    );
+  }
+});
+
+app.get("/nlp/health", async (_req, res) => {
+  const service = await resolveNlpService();
+  if (!service) {
+    return sendError(
+      res,
+      503,
+      "NLP_UNAVAILABLE",
+      "Model NLP belum dapat dihubungi atau belum selesai dimuat.",
+      `Alamat diperiksa: ${nlpCandidates.join(", ")}`,
+    );
+  }
+
+  res.set("Cache-Control", "no-store");
+  res.json({
+    ...service.data,
+    proxied_by: "bank-sampah-api",
+    upstream: service.baseUrl,
+  });
+});
+
+app.post("/nlp/chat", async (req, res) => {
+  const message = req.body.message?.toString().trim();
+  if (!message) {
+    return sendError(
+      res,
+      422,
+      "VALIDATION_ERROR",
+      "Pesan chatbot harus diisi.",
+    );
+  }
+
+  const service = await resolveNlpService();
+  if (!service) {
+    return sendError(
+      res,
+      503,
+      "NLP_UNAVAILABLE",
+      "Model NLP belum dapat dihubungi atau belum selesai dimuat.",
+    );
+  }
+
+  try {
+    const response = await fetchWithTimeout(
+      `${service.baseUrl}/chat`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message }),
+      },
+      120000,
+    );
+    const data = await response.json();
+    if (!response.ok || !data.response) {
+      return sendError(
+        res,
+        response.status || 502,
+        "NLP_RESPONSE_FAILED",
+        data.detail || "Model NLP belum menghasilkan jawaban.",
+      );
+    }
+
+    res.json({
+      response: data.response,
+      model: data.model || service.data.model,
+    });
+  } catch (error) {
+    sendError(
+      res,
+      504,
+      "NLP_TIMEOUT",
+      error.name === "AbortError"
+        ? "Model NLP terlalu lama merespons."
+        : "Koneksi ke model NLP terputus.",
     );
   }
 });

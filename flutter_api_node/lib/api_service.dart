@@ -48,23 +48,29 @@ class ApiService {
     'API_HOST',
     defaultValue: '192.168.1.15',
   );
-  static const String _nlpPort = String.fromEnvironment(
-    'NLP_PORT',
-    defaultValue: '8001',
-  );
+  static const String _defaultApiBaseUrl = 'http://$_host:3000';
 
-  final String baseUrl = 'http://$_host:3000';
-  final String baseUrlNlp = 'http://$_host:$_nlpPort';
-  final String baseUrlFace = 'http://$_host:5000';
+  ApiService({String? apiBaseUrl, String? nlpBaseUrl, String? faceBaseUrl})
+    : baseUrl = apiBaseUrl ?? _defaultApiBaseUrl,
+      baseUrlNlp = nlpBaseUrl ?? '${apiBaseUrl ?? _defaultApiBaseUrl}/nlp',
+      baseUrlFace = faceBaseUrl ?? 'http://$_host:5000';
+
+  final String baseUrl;
+  final String baseUrlNlp;
+  final String baseUrlFace;
 
   static const Duration _shortTimeout = Duration(seconds: 2);
   static const Duration _requestTimeout = Duration(seconds: 15);
+  static const Duration _chatTimeout = Duration(seconds: 125);
 
   Future<ServiceHealth> checkBackendHealth() async {
     return _checkHealth(
       Uri.parse('$baseUrl/health'),
       onlineMessage: 'Database terhubung',
       offlineMessage: 'API atau database tidak terhubung',
+      validate: (data) =>
+          data?['service'] == 'bank-sampah-api' &&
+          data?['database'] == 'connected',
     );
   }
 
@@ -73,6 +79,10 @@ class ApiService {
       Uri.parse('$baseUrlNlp/health'),
       onlineMessage: 'Chatbot terhubung',
       offlineMessage: 'Chatbot tidak terhubung',
+      validate: (data) =>
+          data?['service'] == 'bank-sampah-chatbot' &&
+          data?['status'] == 'ready' &&
+          data?['model_loaded'] == true,
     );
   }
 
@@ -81,6 +91,10 @@ class ApiService {
       Uri.parse('$baseUrlFace/health'),
       onlineMessage: 'Pengenalan wajah siap',
       offlineMessage: 'Layanan wajah tidak terhubung',
+      validate: (data) =>
+          data?['service'] == 'face-recognition-api' &&
+          data?['status'] == 'ok' &&
+          data?['model_loaded'] == true,
     );
   }
 
@@ -88,11 +102,30 @@ class ApiService {
     Uri uri, {
     required String onlineMessage,
     required String offlineMessage,
+    required bool Function(Map<String, dynamic>? data) validate,
   }) async {
     final checkedAt = DateTime.now();
     try {
-      final response = await http.get(uri).timeout(_shortTimeout);
-      if (response.statusCode >= 200 && response.statusCode < 300) {
+      final healthUri = uri.replace(
+        queryParameters: {
+          ...uri.queryParameters,
+          '_health_check': checkedAt.millisecondsSinceEpoch.toString(),
+        },
+      );
+      final response = await http
+          .get(
+            healthUri,
+            headers: const {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache',
+              'Expires': '0',
+            },
+          )
+          .timeout(_shortTimeout);
+      final data = _decodeMap(response.body);
+      if (response.statusCode >= 200 &&
+          response.statusCode < 300 &&
+          validate(data)) {
         return ServiceHealth(
           online: true,
           message: onlineMessage,
@@ -101,7 +134,12 @@ class ApiService {
       }
       return ServiceHealth(
         online: false,
-        message: _readMessage(response, fallback: offlineMessage),
+        message:
+            response.statusCode >= 200 &&
+                response.statusCode < 300 &&
+                data != null
+            ? '$offlineMessage (service belum siap)'
+            : _readMessage(response, fallback: offlineMessage),
         checkedAt: checkedAt,
       );
     } on TimeoutException {
@@ -127,7 +165,7 @@ class ApiService {
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({'message': message}),
           )
-          .timeout(_requestTimeout);
+          .timeout(_chatTimeout);
 
       if (response.statusCode == 200) {
         final data = _decodeMap(response.body);

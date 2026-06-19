@@ -14,7 +14,7 @@ class ChatPage extends StatefulWidget {
   State<ChatPage> createState() => _ChatPageState();
 }
 
-class _ChatPageState extends State<ChatPage> {
+class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   final _controller = TextEditingController();
   final _scrollController = ScrollController();
   final List<_ChatMessage> _messages = [];
@@ -22,6 +22,7 @@ class _ChatPageState extends State<ChatPage> {
   bool _checkingConnection = true;
   ServiceHealth? _health;
   Timer? _healthTimer;
+  bool _healthCheckInFlight = false;
 
   bool get _online => _health?.online == true;
 
@@ -34,6 +35,7 @@ class _ChatPageState extends State<ChatPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _refreshHealth();
     _healthTimer = Timer.periodic(
       const Duration(seconds: 5),
@@ -43,10 +45,18 @@ class _ChatPageState extends State<ChatPage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _healthTimer?.cancel();
     _controller.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshHealth(silent: false);
+    }
   }
 
   Future<void> _sendMessage([String? suggestion]) async {
@@ -89,13 +99,19 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Future<void> _refreshHealth({bool silent = false}) async {
+    if (_healthCheckInFlight) return;
+    _healthCheckInFlight = true;
     if (!silent && mounted) setState(() => _checkingConnection = true);
-    final health = await ApiService().checkChatbotHealth();
-    if (!mounted) return;
-    setState(() {
-      _health = health;
-      _checkingConnection = false;
-    });
+    try {
+      final health = await ApiService().checkChatbotHealth();
+      if (!mounted) return;
+      setState(() {
+        _health = health;
+        _checkingConnection = false;
+      });
+    } finally {
+      _healthCheckInFlight = false;
+    }
   }
 
   void _scrollToBottom() {
@@ -133,7 +149,6 @@ class _ChatPageState extends State<ChatPage> {
             online: _online,
             checking: _checkingConnection,
             onSend: _sendMessage,
-            onReconnect: _refreshHealth,
           ),
         ],
       ),
@@ -493,7 +508,6 @@ class _MessageComposer extends StatelessWidget {
     required this.online,
     required this.checking,
     required this.onSend,
-    required this.onReconnect,
   });
 
   final TextEditingController controller;
@@ -501,7 +515,6 @@ class _MessageComposer extends StatelessWidget {
   final bool online;
   final bool checking;
   final VoidCallback onSend;
-  final Future<void> Function({bool silent}) onReconnect;
 
   @override
   Widget build(BuildContext context) {
@@ -517,24 +530,26 @@ class _MessageComposer extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (!online && !checking)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
+              const Padding(
+                padding: EdgeInsets.only(bottom: 8),
                 child: Row(
                   children: [
-                    const Expanded(
+                    Icon(
+                      Icons.cloud_off_outlined,
+                      color: AppTheme.error,
+                      size: 17,
+                    ),
+                    SizedBox(width: 8),
+                    Expanded(
                       child: Text(
-                        'Chatbot sedang tidak terhubung.',
+                        'Chatbot tidak terhubung. Tarik halaman ke bawah untuk memeriksa ulang.',
                         style: TextStyle(
                           color: AppTheme.error,
-                          fontSize: 12,
+                          fontSize: 11,
                           fontWeight: FontWeight.w600,
+                          height: 1.35,
                         ),
                       ),
-                    ),
-                    TextButton.icon(
-                      onPressed: () => onReconnect(silent: false),
-                      icon: const Icon(Icons.refresh_rounded, size: 17),
-                      label: const Text('Hubungkan'),
                     ),
                   ],
                 ),

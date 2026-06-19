@@ -1,6 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
+$apiHost = if ($env:API_HOST) { $env:API_HOST } else { '192.168.1.15' }
 
 function Start-HiddenService {
     param(
@@ -43,7 +44,7 @@ Start-HiddenService `
 Start-HiddenService `
     -Name 'Chatbot API' `
     -FilePath 'C:\Users\daven\anaconda3\python.exe' `
-    -Arguments @('-m', 'uvicorn', 'main:app', '--host', '0.0.0.0', '--port', '8001') `
+    -Arguments @('-m', 'uvicorn', 'main:app', '--host', '127.0.0.1', '--port', '8001') `
     -WorkingDirectory (Join-Path $root 'nlp-api') `
     -LogName 'nlp-api'
 
@@ -51,4 +52,4 @@ Write-Host ''
 Write-Host 'Health endpoints:'
 Write-Host '  http://127.0.0.1:3000/health'
 Write-Host '  http://127.0.0.1:5000/health'
-Write-Host '  http://127.0.0.1:8001/health'
+Write-Host "  http://$apiHost`:3000/nlp/health (proxy untuk NLP lokal)"

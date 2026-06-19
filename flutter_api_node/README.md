@@ -14,12 +14,25 @@ Layanan yang digunakan:
 
 - API dan database: `http://192.168.1.15:3000`
 - Face recognition: `http://192.168.1.15:5000`
-- Chatbot NLP: `http://192.168.1.15:8001`
+- Chatbot NLP melalui proxy API: `http://192.168.1.15:3000/nlp`
 
 Chatbot memakai model `microsoft/DialoGPT-medium`. Status di aplikasi berubah
 menjadi **Terhubung** hanya setelah endpoint `/health` memastikan model selesai
 dimuat. Status diperiksa ulang setiap lima detik dan dapat diperbarui langsung
 dengan menarik halaman chatbot ke bawah.
+
+Chatbot boleh tetap dijalankan hanya pada localhost. API Node akan menemukan
+service NLP yang valid pada port `8001` atau `8000`, kemudian meneruskannya ke
+ponsel:
+
+```powershell
+cd nlp-api
+C:\Users\daven\anaconda3\python.exe -m uvicorn main:app --host 127.0.0.1 --port 8001
+```
+
+Jika port `8000` sudah digunakan aplikasi lain, gunakan `8001`. Status di
+Flutter berasal dari `http://192.168.1.15:3000/nlp/health`, sehingga health
+check dan pengiriman pesan selalu melewati jalur yang sama.
 
 ## Menjalankan aplikasi
 
@@ -33,12 +46,6 @@ Jika alamat IP komputer berubah:
 
 ```powershell
 flutter run --dart-define=API_HOST=ALAMAT_IP
-```
-
-Port chatbot juga dapat diganti:
-
-```powershell
-flutter run --dart-define=NLP_PORT=8001
 ```
 
 ## Fitur aktif
