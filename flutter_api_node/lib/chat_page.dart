@@ -163,44 +163,45 @@ class _ChatHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dotColor = checkingServer
-        ? AppTheme.warning
-        : serverOnline
-        ? AppTheme.secondary
-        : AppTheme.error;
-
     return Container(
       margin: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-      padding: const EdgeInsets.all(10),
-      decoration: AppTheme.cardDecoration(
-        color: AppTheme.lightGreen,
-        bordered: true,
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Text(
-            'Status',
-            style: TextStyle(
-              color: AppTheme.primaryDark,
-              fontWeight: FontWeight.w700,
-              fontSize: 15,
-            ),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: AppTheme.primaryDark,
+            borderRadius: BorderRadius.circular(999),
           ),
-          const SizedBox(width: 8),
-          Container(
-            width: 12,
-            height: 12,
-            decoration: BoxDecoration(
-              color: dotColor,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(color: dotColor.withAlpha(80), blurRadius: 6),
-              ],
-            ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                checkingServer
+                    ? Icons.sync_rounded
+                    : serverOnline
+                    ? Icons.cloud_done_outlined
+                    : Icons.cloud_off_outlined,
+                color: Colors.white,
+                size: 16,
+              ),
+              const SizedBox(width: 7),
+              Text(
+                checkingServer
+                    ? 'MEMERIKSA'
+                    : serverOnline
+                    ? 'TERHUBUNG'
+                    : 'TERPUTUS',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.6,
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
