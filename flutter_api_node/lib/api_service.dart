@@ -46,12 +46,12 @@ class FaceRecognitionResult {
 class ApiService {
   static const String _host = String.fromEnvironment(
     'API_HOST',
-    defaultValue: '10.54.13.99',
+    defaultValue: '192.168.1.15',
   );
   static const String _defaultApiBaseUrl = 'http://$_host:3000';
 
   ApiService({String? apiBaseUrl, String? nlpBaseUrl, String? faceBaseUrl})
-    : baseUrl = "http://192.168.1.15:3000",
+    : baseUrl = _defaultApiBaseUrl,
       baseUrlNlp = nlpBaseUrl ?? '$_defaultApiBaseUrl/nlp',
       baseUrlFace = faceBaseUrl ?? 'http://$_host:5000';
 

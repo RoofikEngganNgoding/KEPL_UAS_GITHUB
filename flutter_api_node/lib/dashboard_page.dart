@@ -282,6 +282,9 @@ class _DashboardPageState extends State<DashboardPage> {
         actions: [
           PopupMenuButton<String>(
             tooltip: 'Menu akun',
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
             onSelected: (value) {
               if (value == 'logout') _confirmLogout();
             },

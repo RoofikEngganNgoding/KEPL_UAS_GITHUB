@@ -99,18 +99,21 @@ class _LoginPageState extends State<LoginPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'Silahkan Masuk',
-                            style: Theme.of(context).textTheme.headlineMedium, 
-                            textAlign: TextAlign.center,
-                            
+                          Center(
+                            child: Text(
+                              'Silahkan Masuk',
+                              style: Theme.of(context).textTheme.headlineMedium,
+                              textAlign: TextAlign.center,
+                            ),
                           ),
                           const SizedBox(height: 6),
-                          const Text(
-                            'Masuk untuk mengelola data sampah yang tersimpan di akunmu.',
-                            style: TextStyle(
-                              color: AppTheme.greyText,
-                              height: 1.5,
+                          Center(
+                            child: const Text(
+                              'Masuk untuk mengelola data sampah.',
+                              style: TextStyle(
+                                color: AppTheme.greyText,
+                                height: 1.5,
+                              ),
                             ),
                           ),
                           const SizedBox(height: 24),

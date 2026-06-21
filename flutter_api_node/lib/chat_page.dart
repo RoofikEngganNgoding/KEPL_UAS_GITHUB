@@ -171,48 +171,21 @@ class _ChatHeader extends StatelessWidget {
 
     return Container(
       margin: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(10),
       decoration: AppTheme.cardDecoration(
         color: AppTheme.lightGreen,
         bordered: true,
       ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(
-            width: 46,
-            height: 46,
-            decoration: const BoxDecoration(
-              gradient: AppTheme.heroGradient,
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.auto_awesome_rounded,
-              color: Colors.white,
-              size: 22,
-            ),
-          ),
-          const SizedBox(width: 14),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Asisten Bank Sampah',
-                  style: TextStyle(
-                    color: AppTheme.primaryDark,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                  ),
-                ),
-                SizedBox(height: 2),
-                Text(
-                  'Tanya seputar pengelolaan sampah',
-                  style: TextStyle(
-                    color: AppTheme.greyText,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
+          const Text(
+            'Status',
+            style: TextStyle(
+              color: AppTheme.primaryDark,
+              fontWeight: FontWeight.w700,
+              fontSize: 15,
             ),
           ),
           const SizedBox(width: 8),
@@ -223,10 +196,7 @@ class _ChatHeader extends StatelessWidget {
               color: dotColor,
               shape: BoxShape.circle,
               boxShadow: [
-                BoxShadow(
-                  color: dotColor.withAlpha(80),
-                  blurRadius: 6,
-                ),
+                BoxShadow(color: dotColor.withAlpha(80), blurRadius: 6),
               ],
             ),
           ),
