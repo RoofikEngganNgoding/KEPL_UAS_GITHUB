@@ -14,17 +14,14 @@ class ChatPage extends StatefulWidget {
   State<ChatPage> createState() => _ChatPageState();
 }
 
-class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
+class _ChatPageState extends State<ChatPage> {
   final _controller = TextEditingController();
   final _scrollController = ScrollController();
   final List<_ChatMessage> _messages = [];
   bool _isTyping = false;
-  bool _checkingConnection = true;
-  ServiceHealth? _health;
+  bool _serverOnline = false;
+  bool _checkingServer = true;
   Timer? _healthTimer;
-  bool _healthCheckInFlight = false;
-
-  bool get _online => _health?.online == true;
 
   static const _suggestions = [
     'Bagaimana cara memilah sampah?',
@@ -35,38 +32,42 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    _refreshHealth();
+    _checkServer();
     _healthTimer = Timer.periodic(
-      const Duration(seconds: 5),
-      (_) => _refreshHealth(silent: true),
+      const Duration(seconds: 8),
+      (_) => _checkServer(silent: true),
     );
   }
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
     _healthTimer?.cancel();
     _controller.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _refreshHealth(silent: false);
+  Future<void> _checkServer({bool silent = false}) async {
+    if (!silent && mounted) setState(() => _checkingServer = true);
+    try {
+      final health = await ApiService().checkChatbotHealth();
+      if (!mounted) return;
+      setState(() {
+        _serverOnline = health.online;
+        _checkingServer = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _serverOnline = false;
+        _checkingServer = false;
+      });
     }
   }
 
   Future<void> _sendMessage([String? suggestion]) async {
     final text = (suggestion ?? _controller.text).trim();
     if (text.isEmpty || _isTyping) return;
-
-    if (!_online) {
-      await _refreshHealth();
-      if (!_online || !mounted) return;
-    }
 
     setState(() {
       _messages.add(_ChatMessage(text: text, isUser: true));
@@ -87,31 +88,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
         ),
       );
       _isTyping = false;
-      if (!result.success) {
-        _health = ServiceHealth(
-          online: false,
-          message: 'Chatbot tidak terhubung',
-          checkedAt: DateTime.now(),
-        );
-      }
     });
     _scrollToBottom();
-  }
-
-  Future<void> _refreshHealth({bool silent = false}) async {
-    if (_healthCheckInFlight) return;
-    _healthCheckInFlight = true;
-    if (!silent && mounted) setState(() => _checkingConnection = true);
-    try {
-      final health = await ApiService().checkChatbotHealth();
-      if (!mounted) return;
-      setState(() {
-        _health = health;
-        _checkingConnection = false;
-      });
-    } finally {
-      _healthCheckInFlight = false;
-    }
   }
 
   void _scrollToBottom() {
@@ -132,10 +110,13 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       child: Column(
         children: [
           if (widget.embedded)
-            _EmbeddedChatHeader(health: _health, checking: _checkingConnection),
+            _ChatHeader(
+              serverOnline: _serverOnline,
+              checkingServer: _checkingServer,
+            ),
           Expanded(
             child: RefreshIndicator(
-              onRefresh: () => _refreshHealth(silent: false),
+              onRefresh: () => _checkServer(silent: false),
               color: AppTheme.primary,
               child: _messages.isEmpty
                   ? _ChatEmptyState(onSuggestion: _sendMessage)
@@ -146,8 +127,6 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
           _MessageComposer(
             controller: _controller,
             isTyping: _isTyping,
-            online: _online,
-            checking: _checkingConnection,
             onSend: _sendMessage,
           ),
         ],
@@ -176,25 +155,19 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   }
 }
 
-class _EmbeddedChatHeader extends StatelessWidget {
-  const _EmbeddedChatHeader({required this.health, required this.checking});
+class _ChatHeader extends StatelessWidget {
+  const _ChatHeader({required this.serverOnline, required this.checkingServer});
 
-  final ServiceHealth? health;
-  final bool checking;
+  final bool serverOnline;
+  final bool checkingServer;
 
   @override
   Widget build(BuildContext context) {
-    final online = health?.online == true;
-    final statusColor = checking
+    final dotColor = checkingServer
         ? AppTheme.warning
-        : online
+        : serverOnline
         ? AppTheme.secondary
         : AppTheme.error;
-    final statusLabel = checking
-        ? 'Memeriksa'
-        : online
-        ? 'Terhubung'
-        : 'Terputus';
 
     return Container(
       margin: const EdgeInsets.fromLTRB(20, 12, 20, 0),
@@ -205,30 +178,36 @@ class _EmbeddedChatHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const CircleAvatar(
-            radius: 23,
-            backgroundColor: AppTheme.primary,
-            foregroundColor: Colors.white,
-            child: Icon(Icons.auto_awesome_rounded),
+          Container(
+            width: 46,
+            height: 46,
+            decoration: const BoxDecoration(
+              gradient: AppTheme.heroGradient,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.auto_awesome_rounded,
+              color: Colors.white,
+              size: 22,
+            ),
           ),
-          const SizedBox(width: 12),
-          Expanded(
+          const SizedBox(width: 14),
+          const Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Asisten Bank Sampah',
                   style: TextStyle(
                     color: AppTheme.primaryDark,
                     fontWeight: FontWeight.w700,
+                    fontSize: 15,
                   ),
                 ),
-                const SizedBox(height: 3),
+                SizedBox(height: 2),
                 Text(
-                  checking
-                      ? 'Memeriksa layanan chatbot...'
-                      : health?.message ?? 'Status belum diperiksa',
-                  style: const TextStyle(
+                  'Tanya seputar pengelolaan sampah',
+                  style: TextStyle(
                     color: AppTheme.greyText,
                     fontSize: 12,
                   ),
@@ -237,54 +216,18 @@ class _EmbeddedChatHeader extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          _ConnectionBadge(
-            label: statusLabel,
-            color: statusColor,
-            loading: checking,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ConnectionBadge extends StatelessWidget {
-  const _ConnectionBadge({
-    required this.label,
-    required this.color,
-    required this.loading,
-  });
-
-  final String label;
-  final Color color;
-  final bool loading;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (loading)
-            SizedBox(
-              width: 10,
-              height: 10,
-              child: CircularProgressIndicator(strokeWidth: 1.7, color: color),
-            )
-          else
-            CircleAvatar(radius: 4, backgroundColor: color),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
+          Container(
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(
+              color: dotColor,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: dotColor.withAlpha(80),
+                  blurRadius: 6,
+                ),
+              ],
             ),
           ),
         ],
@@ -293,10 +236,37 @@ class _ConnectionBadge extends StatelessWidget {
   }
 }
 
-class _ChatEmptyState extends StatelessWidget {
+class _ChatEmptyState extends StatefulWidget {
   const _ChatEmptyState({required this.onSuggestion});
 
   final ValueChanged<String> onSuggestion;
+
+  @override
+  State<_ChatEmptyState> createState() => _ChatEmptyStateState();
+}
+
+class _ChatEmptyStateState extends State<_ChatEmptyState>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulseController;
+  late final Animation<double> _pulseAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 3),
+    )..repeat(reverse: true);
+    _pulseAnimation = Tween<double>(begin: 0.85, end: 1.0).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -305,37 +275,34 @@ class _ChatEmptyState extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(24, 36, 24, 24),
       child: Column(
         children: [
-          Container(
-            width: 92,
-            height: 92,
-            decoration: BoxDecoration(
-              gradient: AppTheme.heroGradient,
-              borderRadius: BorderRadius.circular(30),
-              boxShadow: [
-                BoxShadow(
-                  color: AppTheme.primary.withAlpha(38),
-                  blurRadius: 22,
-                  offset: const Offset(0, 10),
-                ),
-              ],
-            ),
-            child: const Icon(
-              Icons.chat_bubble_outline_rounded,
-              color: Colors.white,
-              size: 42,
+          ScaleTransition(
+            scale: _pulseAnimation,
+            child: Container(
+              width: 88,
+              height: 88,
+              decoration: BoxDecoration(
+                gradient: AppTheme.heroGradient,
+                borderRadius: BorderRadius.circular(28),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.primary.withAlpha(38),
+                    blurRadius: 22,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.chat_bubble_outline_rounded,
+                color: Colors.white,
+                size: 40,
+              ),
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 22),
           Text(
             'Apa yang ingin kamu tanyakan?',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.headlineMedium,
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Asisten dapat membantu menjawab pertanyaan tentang pemilahan, daur ulang, dan pengelolaan sampah.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: AppTheme.greyText, height: 1.5),
           ),
           const SizedBox(height: 24),
           Align(
@@ -354,7 +321,7 @@ class _ChatEmptyState extends StatelessWidget {
             (suggestion) => Padding(
               padding: const EdgeInsets.only(bottom: 9),
               child: InkWell(
-                onTap: () => onSuggestion(suggestion),
+                onTap: () => widget.onSuggestion(suggestion),
                 borderRadius: BorderRadius.circular(AppTheme.cardRadius),
                 child: Ink(
                   width: double.infinity,
@@ -482,21 +449,74 @@ class _TypingIndicator extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(20, 4, 20, 8),
       child: Row(
         children: [
-          SizedBox(
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: AppTheme.primary,
-            ),
+          CircleAvatar(
+            radius: 14,
+            backgroundColor: AppTheme.primaryContainer,
+            foregroundColor: AppTheme.primaryDark,
+            child: Icon(Icons.auto_awesome_rounded, size: 15),
           ),
           SizedBox(width: 10),
-          Text(
-            'Asisten sedang menyiapkan jawaban...',
-            style: TextStyle(color: AppTheme.greyText, fontSize: 12),
-          ),
+          _DotsAnimation(),
         ],
       ),
+    );
+  }
+}
+
+class _DotsAnimation extends StatefulWidget {
+  const _DotsAnimation();
+
+  @override
+  State<_DotsAnimation> createState() => _DotsAnimationState();
+}
+
+class _DotsAnimationState extends State<_DotsAnimation>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: List.generate(3, (i) {
+            final delay = i * 0.2;
+            final value = ((_controller.value - delay) % 1.0).clamp(0.0, 1.0);
+            final bounce = value < 0.5
+                ? Curves.easeOut.transform(value * 2)
+                : Curves.easeIn.transform(1 - (value - 0.5) * 2);
+            return Transform.translate(
+              offset: Offset(0, -5 * bounce),
+              child: Container(
+                width: 7,
+                height: 7,
+                margin: const EdgeInsets.symmetric(horizontal: 2.5),
+                decoration: const BoxDecoration(
+                  color: AppTheme.primary,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            );
+          }),
+        );
+      },
     );
   }
 }
@@ -505,15 +525,11 @@ class _MessageComposer extends StatelessWidget {
   const _MessageComposer({
     required this.controller,
     required this.isTyping,
-    required this.online,
-    required this.checking,
     required this.onSend,
   });
 
   final TextEditingController controller;
   final bool isTyping;
-  final bool online;
-  final bool checking;
   final VoidCallback onSend;
 
   @override
@@ -526,80 +542,50 @@ class _MessageComposer extends StatelessWidget {
       ),
       child: SafeArea(
         top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            if (!online && !checking)
-              const Padding(
-                padding: EdgeInsets.only(bottom: 8),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.cloud_off_outlined,
-                      color: AppTheme.error,
-                      size: 17,
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: AppTheme.surfaceLow,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: AppTheme.outline),
+                ),
+                child: TextField(
+                  controller: controller,
+                  enabled: !isTyping,
+                  minLines: 1,
+                  maxLines: 4,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: const InputDecoration(
+                    hintText: 'Tulis pertanyaanmu...',
+                    prefixIcon: Icon(Icons.eco_outlined),
+                    filled: false,
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    disabledBorder: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 14,
                     ),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Chatbot tidak terhubung. Tarik halaman ke bawah untuk memeriksa ulang.',
-                        style: TextStyle(
-                          color: AppTheme.error,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          height: 1.35,
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
+                  onSubmitted: (_) => onSend(),
                 ),
               ),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: AppTheme.surfaceLow,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: AppTheme.outline),
-                    ),
-                    child: TextField(
-                      controller: controller,
-                      enabled: online && !isTyping,
-                      minLines: 1,
-                      maxLines: 4,
-                      textCapitalization: TextCapitalization.sentences,
-                      decoration: const InputDecoration(
-                        hintText: 'Tulis pertanyaanmu...',
-                        prefixIcon: Icon(Icons.eco_outlined),
-                        filled: false,
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        disabledBorder: InputBorder.none,
-                        contentPadding: EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 14,
-                        ),
-                      ),
-                      onSubmitted: (_) => onSend(),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                IconButton.filled(
-                  onPressed: online && !isTyping ? onSend : null,
-                  tooltip: 'Kirim pesan',
-                  style: IconButton.styleFrom(
-                    backgroundColor: AppTheme.primary,
-                    foregroundColor: Colors.white,
-                    disabledBackgroundColor: AppTheme.outline,
-                    minimumSize: const Size(52, 52),
-                  ),
-                  icon: const Icon(Icons.send_rounded),
-                ),
-              ],
+            ),
+            const SizedBox(width: 10),
+            IconButton.filled(
+              onPressed: isTyping ? null : onSend,
+              tooltip: 'Kirim pesan',
+              style: IconButton.styleFrom(
+                backgroundColor: AppTheme.primary,
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: AppTheme.outline,
+                minimumSize: const Size(52, 52),
+              ),
+              icon: const Icon(Icons.send_rounded),
             ),
           ],
         ),

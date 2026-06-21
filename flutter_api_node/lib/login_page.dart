@@ -100,8 +100,10 @@ class _LoginPageState extends State<LoginPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Selamat datang kembali',
-                            style: Theme.of(context).textTheme.headlineMedium,
+                            'Silahkan Masuk',
+                            style: Theme.of(context).textTheme.headlineMedium, 
+                            textAlign: TextAlign.center,
+                            
                           ),
                           const SizedBox(height: 6),
                           const Text(
@@ -232,7 +234,7 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                   ),
                   const SizedBox(height: 18),
-                  const _SecurityNote(),
+                  // const _SecurityNote(),
                 ],
               ),
             ),
@@ -290,33 +292,33 @@ class _BrandHeader extends StatelessWidget {
   }
 }
 
-class _SecurityNote extends StatelessWidget {
-  const _SecurityNote();
+// class _SecurityNote extends StatelessWidget {
+//   const _SecurityNote();
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: AppTheme.cardDecoration(
-        color: AppTheme.lightGreen,
-        bordered: true,
-      ),
-      child: const Row(
-        children: [
-          Icon(Icons.verified_user_outlined, color: AppTheme.primary),
-          SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              'Login wajah menggunakan kamera depan dan hanya dipakai untuk proses verifikasi akun.',
-              style: TextStyle(
-                color: AppTheme.primaryDark,
-                fontSize: 12,
-                height: 1.45,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+//   @override
+//   Widget build(BuildContext context) {
+//     return Container(
+//       padding: const EdgeInsets.all(14),
+//       decoration: AppTheme.cardDecoration(
+//         color: AppTheme.lightGreen,
+//         bordered: true,
+//       ),
+//       child: const Row(
+//         children: [
+//           Icon(Icons.verified_user_outlined, color: AppTheme.primary),
+//           SizedBox(width: 12),
+//           Expanded(
+//             child: Text(
+//               'Login wajah menggunakan kamera depan dan hanya dipakai untuk proses verifikasi akun.',
+//               style: TextStyle(
+//                 color: AppTheme.primaryDark,
+//                 fontSize: 12,
+//                 height: 1.45,
+//               ),
+//             ),
+//           ),
+//         ],
+//       ),
+//     );
+//   }
+// }

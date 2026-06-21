@@ -44,7 +44,7 @@ Start-HiddenService `
 Start-HiddenService `
     -Name 'Chatbot API' `
     -FilePath 'C:\Users\daven\anaconda3\python.exe' `
-    -Arguments @('-m', 'uvicorn', 'main:app', '--host', '127.0.0.1', '--port', '8001') `
+    -Arguments @('-m', 'uvicorn', 'main:app', '--host', '0.0.0.0', '--port', '8001') `
     -WorkingDirectory (Join-Path $root 'nlp-api') `
     -LogName 'nlp-api'
 
@@ -53,3 +53,4 @@ Write-Host 'Health endpoints:'
 Write-Host '  http://127.0.0.1:3000/health'
 Write-Host '  http://127.0.0.1:5000/health'
 Write-Host "  http://$apiHost`:3000/nlp/health (proxy untuk NLP lokal)"
+Write-Host "  http://$apiHost`:8001/health (NLP langsung - untuk NLP_DIRECT_URL)"

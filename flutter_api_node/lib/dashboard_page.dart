@@ -478,7 +478,7 @@ class _WasteDataPage extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               const Text(
-                'Tambah, ubah, atau hapus data yang tersimpan pada akunmu.',
+                'Kelola data sampahmu.',
                 style: TextStyle(color: AppTheme.greyText),
               ),
               const SizedBox(height: 16),
@@ -514,9 +514,9 @@ class _WasteDataPage extends StatelessWidget {
               else if (hasError)
                 _ActionState(
                   icon: Icons.cloud_off_rounded,
-                  title: 'Data belum dapat dimuat',
+                  title: 'Gagal memuat data',
                   description: errorMessage.isEmpty
-                      ? 'Periksa koneksi ke API Bank Sampah, lalu coba kembali.'
+                      ? 'Periksa koneksi ke server, lalu coba lagi.'
                       : errorMessage,
                   actionLabel: 'Coba Lagi',
                   onAction: onRefresh,
@@ -524,18 +524,16 @@ class _WasteDataPage extends StatelessWidget {
               else if (items.isEmpty && searchController.text.isNotEmpty)
                 _ActionState(
                   icon: Icons.search_off_rounded,
-                  title: 'Data tidak ditemukan',
-                  description:
-                      'Tidak ada jenis sampah yang cocok dengan pencarianmu.',
+                  title: 'Tidak ditemukan',
+                  description: 'Tidak ada sampah yang cocok.',
                   actionLabel: 'Hapus Pencarian',
                   onAction: onClearSearch,
                 )
               else if (items.isEmpty)
                 _ActionState(
                   icon: Icons.inventory_2_outlined,
-                  title: 'Belum ada data sampah',
-                  description:
-                      'Tambahkan jenis sampah pertama beserta fotonya.',
+                  title: 'Belum ada data',
+                  description: 'Tambahkan data sampah pertamamu.',
                   actionLabel: 'Tambah Sampah',
                   onAction: onAdd,
                 )
@@ -571,7 +569,7 @@ class _DatabaseHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 250,
+      height: 200,
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
         gradient: AppTheme.heroGradient,
@@ -623,10 +621,10 @@ class _DatabaseHero extends StatelessWidget {
                     const SizedBox(width: 7),
                     Text(
                       checking
-                          ? 'MEMERIKSA DATABASE'
+                          ? 'MEMERIKSA'
                           : online
-                          ? 'DATABASE TERHUBUNG'
-                          : 'DATABASE TERPUTUS',
+                          ? 'TERHUBUNG'
+                          : 'TERPUTUS',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 10,
@@ -637,19 +635,14 @@ class _DatabaseHero extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
               Text(
                 'Halo, ${_capitalize(userName)}',
                 style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 23,
+                  fontSize: 22,
                   fontWeight: FontWeight.w700,
                 ),
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                'Kelola katalog sampah dengan rapi.',
-                style: TextStyle(color: Colors.white70),
               ),
               const Spacer(),
               Row(
@@ -669,7 +662,7 @@ class _DatabaseHero extends StatelessWidget {
                     child: Padding(
                       padding: EdgeInsets.only(bottom: 2),
                       child: Text(
-                        'jenis sampah tersimpan',
+                        'jenis sampah',
                         maxLines: 2,
                         style: TextStyle(
                           color: Colors.white,
@@ -839,25 +832,6 @@ class _WasteCard extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 7),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 9,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppTheme.lightGreen,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: const Text(
-                    'DATA AKTIF',
-                    style: TextStyle(
-                      color: AppTheme.primaryDark,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                ),
                 const Spacer(),
                 Row(
                   children: [

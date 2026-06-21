@@ -51,17 +51,17 @@ class ApiService {
   static const String _defaultApiBaseUrl = 'http://$_host:3000';
 
   ApiService({String? apiBaseUrl, String? nlpBaseUrl, String? faceBaseUrl})
-    : baseUrl = apiBaseUrl ?? _defaultApiBaseUrl,
-      baseUrlNlp = nlpBaseUrl ?? '${apiBaseUrl ?? _defaultApiBaseUrl}/nlp',
+    : baseUrl = "http://192.168.1.15:3000",
+      baseUrlNlp = nlpBaseUrl ?? '$_defaultApiBaseUrl/nlp',
       baseUrlFace = faceBaseUrl ?? 'http://$_host:5000';
 
   final String baseUrl;
   final String baseUrlNlp;
   final String baseUrlFace;
 
-  static const Duration _shortTimeout = Duration(seconds: 2);
+  static const Duration _shortTimeout = Duration(seconds: 4);
   static const Duration _requestTimeout = Duration(seconds: 15);
-  static const Duration _chatTimeout = Duration(seconds: 125);
+  static const Duration _chatTimeout = Duration(seconds: 120);
 
   Future<ServiceHealth> checkBackendHealth() async {
     return _checkHealth(
@@ -103,6 +103,7 @@ class ApiService {
     required String onlineMessage,
     required String offlineMessage,
     required bool Function(Map<String, dynamic>? data) validate,
+    Duration? timeout,
   }) async {
     final checkedAt = DateTime.now();
     try {
@@ -121,7 +122,7 @@ class ApiService {
               'Expires': '0',
             },
           )
-          .timeout(_shortTimeout);
+          .timeout(timeout ?? _shortTimeout);
       final data = _decodeMap(response.body);
       if (response.statusCode >= 200 &&
           response.statusCode < 300 &&

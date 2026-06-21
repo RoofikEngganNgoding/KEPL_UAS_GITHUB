@@ -126,11 +126,39 @@ async function probeNlpCandidate(baseUrl) {
   }
 }
 
+let _cachedNlpService = null;
+let _nlpCacheTimestamp = 0;
+const NLP_CACHE_TTL_MS = 10_000;
+
 async function resolveNlpService() {
+  const now = Date.now();
+  if (_cachedNlpService && (now - _nlpCacheTimestamp) < NLP_CACHE_TTL_MS) {
+    try {
+      const checkRes = await fetchWithTimeout(
+        `${_cachedNlpService.baseUrl}/health?_cache_verify=${now}`,
+        {},
+        1500,
+      );
+      const checkData = await checkRes.json();
+      if (checkRes.ok && isReadyNlpHealth(checkData)) {
+        _cachedNlpService = { baseUrl: _cachedNlpService.baseUrl, data: checkData };
+        _nlpCacheTimestamp = now;
+        return _cachedNlpService;
+      }
+    } catch (_error) {
+      _cachedNlpService = null;
+    }
+  }
+
   for (const candidate of nlpCandidates) {
     const service = await probeNlpCandidate(candidate);
-    if (service) return service;
+    if (service) {
+      _cachedNlpService = service;
+      _nlpCacheTimestamp = now;
+      return service;
+    }
   }
+  _cachedNlpService = null;
   return null;
 }
 

@@ -22,7 +22,6 @@ void main() {
             }),
           );
         } else {
-          // HTTP 200 dari service lain tidak boleh dianggap sebagai chatbot.
           request.response.statusCode = HttpStatus.ok;
           request.response.write(
             jsonEncode({'status': 'ok', 'service': 'not-the-chatbot'}),
