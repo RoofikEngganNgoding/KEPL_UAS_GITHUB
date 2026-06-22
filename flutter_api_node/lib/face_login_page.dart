@@ -145,60 +145,87 @@ class _FaceLoginPageState extends State<FaceLoginPage>
       }
     });
   }
-
   Future<void> _captureAndRecognize() async {
-    final controller = _cameraController;
-    if (controller == null ||
-        !controller.value.isInitialized ||
-        controller.value.isTakingPicture ||
-        _processing) {
+  final controller = _cameraController;
+
+  if (controller == null ||
+      !controller.value.isInitialized ||
+      controller.value.isTakingPicture ||
+      _processing) {
+    return;
+  }
+
+  setState(() {
+    _processing = true;
+    _attempt++;
+    _status = 'Mengambil gambar otomatis...';
+  });
+
+  try {
+    print("Ambil foto...");
+
+    final image = await controller.takePicture();
+
+    print("Foto berhasil diambil");
+    print(image.path);
+
+    if (!mounted) return;
+
+    setState(() {
+      _status = 'Mengenali wajah...';
+    });
+
+    print("Kirim ke API...");
+
+    final recognition = await _apiService.recognizeFace(image);
+
+    print("Response diterima");
+    print("Success : ${recognition.success}");
+    print("Message : ${recognition.message}");
+
+    if (!mounted) return;
+
+    if (!recognition.success || recognition.data == null) {
+      _handleFailedAttempt(recognition.message);
       return;
     }
 
     setState(() {
-      _processing = true;
-      _attempt++;
-      _status = 'Mengambil gambar otomatis...';
+      _status =
+          'Wajah ${recognition.data!.label} dikenali. Masuk ke akun...';
     });
 
-    try {
-      final image = await controller.takePicture();
-      if (!mounted) return;
-      setState(() => _status = 'Mengenali wajah...');
+    final login = await _apiService.loginWithFaceLabel(
+      recognition.data!.label,
+    );
 
-      final recognition = await _apiService.recognizeFace(image);
-      if (!mounted) return;
+    print("Login wajah : ${login.success}");
+    print("Pesan login : ${login.message}");
 
-      if (!recognition.success || recognition.data == null) {
-        _handleFailedAttempt(recognition.message);
-        return;
-      }
+    if (!mounted) return;
 
-      setState(() {
-        _status = 'Wajah ${recognition.data!.label} dikenali. Masuk ke akun...';
-      });
-
-      final login = await _apiService.loginWithFaceLabel(
-        recognition.data!.label,
-      );
-      if (!mounted) return;
-
-      if (!login.success) {
-        _handleFailedAttempt(login.message);
-        return;
-      }
-
-      Navigator.pushNamedAndRemoveUntil(
-        context,
-        '/dashboard',
-        (route) => false,
-      );
-    } catch (_) {
-      if (!mounted) return;
-      _handleFailedAttempt('Gambar belum dapat diproses.');
+    if (!login.success) {
+      _handleFailedAttempt(login.message);
+      return;
     }
-  }
 
+    Navigator.pushNamedAndRemoveUntil(
+      context,
+      '/dashboard',
+      (route) => false,
+    );
+  } catch (e) {
+    print("====================");
+    print("ERROR FACE LOGIN");
+    print(e);
+    print("====================");
+
+    if (!mounted) return;
+
+    _handleFailedAttempt(e.toString());
+  }
+}
+  
   void _handleFailedAttempt(String message) {
     if (!mounted) return;
 

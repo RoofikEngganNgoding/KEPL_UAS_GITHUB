@@ -14,8 +14,7 @@ const PORT = Number(process.env.PORT || 3000);
 const uploadDirectory = path.join(__dirname, "uploads");
 const nlpCandidates = (
   process.env.NLP_INTERNAL_URLS ||
-  process.env.NLP_INTERNAL_URL ||
-  "http://127.0.0.1:8001,http://127.0.0.1:8000"
+  process.env.NLP_INTERNAL_URL ||  "http://127.0.0.1:8001,http://127.0.0.1:8000"
 )
   .split(",")
   .map((value) => value.trim().replace(/\/+$/, ""))

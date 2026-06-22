@@ -28,6 +28,34 @@ generation_lock = Lock()
 class UserInput(BaseModel):
     message: str
 
+FAQ_DATA = [
+    {
+        "keywords": [
+            "developer",
+            "pengembang",
+            "pembuat aplikasi",
+            "siapa yang membuat aplikasi",
+            "anggota kelompok"
+        ],
+        "answer": """Aplikasi Bank Sampah Digital dikembangkan oleh kelompok yang beranggotakan:
+
+1. Roofik Aditya Erlangga
+2. Daveo Dava Putra
+3. Juliarti Safitri"""
+    }
+]
+
+
+def search_faq(message: str):
+    message = message.lower()
+
+    for item in FAQ_DATA:
+        for keyword in item["keywords"]:
+            if keyword in message:
+                return item["answer"]
+
+    return None
+
 
 @app.on_event("startup")
 def load_model():
@@ -63,6 +91,13 @@ def health():
 @app.post("/chat")
 def chat(user_input: UserInput):
     message = user_input.message.strip()
+    faq_answer = search_faq(message)
+
+    if faq_answer:
+        return {
+        "response": faq_answer,
+        "source": "faq"
+    }
     if not message:
         raise HTTPException(status_code=422, detail="Pesan harus diisi")
     if tokenizer is None or model is None or model_error is not None:

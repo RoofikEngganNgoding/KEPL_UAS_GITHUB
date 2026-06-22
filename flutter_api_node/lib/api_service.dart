@@ -46,7 +46,7 @@ class FaceRecognitionResult {
 class ApiService {
   static const String _host = String.fromEnvironment(
     'API_HOST',
-    defaultValue: '192.168.1.15',
+    defaultValue: '192.168.1.4',
   );
   static const String _defaultApiBaseUrl = 'http://$_host:3000';
 
@@ -92,8 +92,8 @@ class ApiService {
       onlineMessage: 'Pengenalan wajah siap',
       offlineMessage: 'Layanan wajah tidak terhubung',
       validate: (data) =>
-          data?['service'] == 'face-recognition-api' &&
-          data?['status'] == 'ok' &&
+          data?['service'] == 'face-recognition' &&
+          data?['status'] == 'ready' &&
           data?['model_loaded'] == true,
     );
   }
